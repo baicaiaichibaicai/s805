@@ -261,7 +261,7 @@ config MMU
 #
 choice
 	prompt "ARM system type"
-	default ARCH_MULTIPLATFORM
+	default PLAT_MESON
 
 config ARCH_MULTIPLATFORM
 	bool "Allow multiple platforms to be selected"
@@ -674,6 +674,23 @@ config ARCH_PXA
 	help
 	  Support for Intel/Marvell's PXA2xx/PXA3xx processor line.
 
+config PLAT_MESON
+	bool "Amlogic Meson"
+	select CPU_V7
+	select ARM_GIC
+	select FIQ
+	select USE_OF
+	select GENERIC_ALLOCATOR
+	select GENERIC_CLOCKEVENTS
+	select NEED_MACH_MEMORY_H
+	select CLKDEV_LOOKUP
+	select ARCH_HAS_CPUFREQ
+	select AM_UART
+	select MIGHT_HAVE_CACHE_L2X0
+	select HAVE_SMP if !ARCH_MESON3
+	help
+	  Support for Amlogic Meson System-on-Chip.
+
 config ARCH_MSM
 	bool "Qualcomm MSM"
 	select ARCH_REQUIRE_GPIOLIB
@@ -1016,6 +1033,8 @@ endmenu
 # Kconfigs may be included either alphabetically (according to the
 # plat- suffix) or along side the corresponding mach-* source.
 #
+source "arch/arm/plat-meson/Kconfig"
+
 source "arch/arm/mach-mvebu/Kconfig"
 
 source "arch/arm/mach-at91/Kconfig"

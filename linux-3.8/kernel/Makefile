@@ -131,7 +131,7 @@ quiet_cmd_timeconst  = TIMEC   $@
       cmd_timeconst  = $(PERL) $< $(CONFIG_HZ) > $@
 targets += timeconst.h
 $(obj)/timeconst.h: $(src)/timeconst.pl FORCE
-	$(call if_changed,timeconst)
+#	$(call if_changed,timeconst)
 
 ifeq ($(CONFIG_MODULE_SIG),y)
 #
