@@ -48,12 +48,23 @@ void scu_enable(void __iomem *scu_base)
 	}
 #endif
 
+	/* added by hkou 02/22/2012 */
+#ifdef CONFIG_ARM_ERRATA_764369
+	/* Cortex-A9 only */
+	if ((read_cpuid(CPUID_ID) & 0xff0ffff0) == 0x410fc090) {
+		scu_ctrl = __raw_readl(scu_base + 0x30);
+		if (!(scu_ctrl & 1))
+			__raw_writel(scu_ctrl | 0x1, scu_base + 0x30);
+	}
+#endif
+
 	scu_ctrl = __raw_readl(scu_base + SCU_CTRL);
 	/* already enabled? */
 	if (scu_ctrl & 1)
 		return;
 
-	scu_ctrl |= 1;
+	/* updated by hkou & ted 02/22/2012 */
+	scu_ctrl |= 0x29;
 	__raw_writel(scu_ctrl, scu_base + SCU_CTRL);
 
 	/*

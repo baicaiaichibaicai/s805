@@ -47,6 +47,15 @@ extern void __raw_readsb(const void __iomem *addr, void *data, int bytelen);
 extern void __raw_readsw(const void __iomem *addr, void *data, int wordlen);
 extern void __raw_readsl(const void __iomem *addr, void *data, int longlen);
 
+#ifdef CONFIG_MACH_CORTINA_G2
+#define __raw_writeb(v,a)	(__chk_io_ptr(a), *(volatile unsigned char __force  *)(a) = (v))
+#define __raw_writew(v,a)	(__chk_io_ptr(a), *(volatile unsigned short __force *)(a) = (v))
+#define __raw_writel(v,a)	(__chk_io_ptr(a), *(volatile unsigned int __force   *)(a) = (v))
+
+#define __raw_readb(a)		(__chk_io_ptr(a), *(volatile unsigned char __force  *)(a))
+#define __raw_readw(a)		(__chk_io_ptr(a), *(volatile unsigned short __force *)(a))
+#define __raw_readl(a)		(__chk_io_ptr(a), *(volatile unsigned int __force   *)(a))
+#else
 #if __LINUX_ARM_ARCH__ < 6
 /*
  * Half-word accesses are problematic with RiscPC due to limitations of
@@ -109,7 +118,7 @@ static inline u32 __raw_readl(const volatile void __iomem *addr)
 		       "=r" (val));
 	return val;
 }
-
+#endif
 /*
  * Architecture ioremap implementation.
  */

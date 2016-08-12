@@ -115,4 +115,18 @@ config R8169
 	  To compile this driver as a module, choose M here: the module
 	  will be called r8169.  This is recommended.
 
+config RTL8370
+	 tristate "Realtek 8370 gigabit ethernet switch support"
+#	depends on FTG_1000 || FTM_100S
+	select FW_LOADER
+	select CRC32
+	select NET_CORE
+	select MII
+	---help---
+	  Say Y here if you have a RTL8370 Gigabit Ethernet switch driver.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called rtl8370.  This is recommended.
+
+
 endif # NET_VENDOR_REALTEK

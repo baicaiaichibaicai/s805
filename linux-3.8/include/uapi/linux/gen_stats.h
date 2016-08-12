@@ -63,5 +63,12 @@ struct gnet_estimator {
 	unsigned char	ewma_log;
 };
 
-
+struct gnet_stats_monitor {
+	struct list_head	list;
+    __u32   id;
+	__u64	bytes;
+	__u64	packets;
+	__u64	pre_bytes;
+	__u64	pre_time;
+};
 #endif /* __LINUX_GEN_STATS_H */

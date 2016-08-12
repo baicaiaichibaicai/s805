@@ -18,6 +18,7 @@
 #include <linux/bootmem.h>
 #include <linux/seq_file.h>
 #include <linux/screen_info.h>
+#include <linux/of_platform.h>
 #include <linux/init.h>
 #include <linux/kexec.h>
 #include <linux/of_fdt.h>
@@ -75,6 +76,10 @@ extern void paging_init(struct machine_desc *desc);
 extern void sanity_check_meminfo(void);
 extern void reboot_setup(char *str);
 extern void setup_dma_zone(struct machine_desc *desc);
+
+#ifdef CONFIG_FERRET
+extern char g_serial[25];
+#endif
 
 unsigned int processor_id;
 EXPORT_SYMBOL(processor_id);
@@ -491,6 +496,11 @@ static void __init setup_processor(void)
 
 	cacheid_init();
 	cpu_init();
+#ifdef CONFIG_CORTINA_FUTURE
+	extern unsigned int num_processors;
+	num_processors = NR_CPUS;
+#endif
+
 }
 
 void __init dump_machine_table(void)
@@ -561,6 +571,10 @@ static int __init early_mem(char *p)
 	phys_addr_t start;
 	char *endp;
 
+#if (defined CONFIG_OF ) && (defined CONFIG_PLAT_MESON )
+	printk(KERN_WARNING "Ignore bootargs \'mem\' param.\n");
+	return 0;
+#endif
 	/*
 	 * If the user specifies memory size, we
 	 * blow away any automatically generated
@@ -729,6 +743,10 @@ void __init hyp_mode_check(void)
 void __init setup_arch(char **cmdline_p)
 {
 	struct machine_desc *mdesc;
+	char *serial;
+       
+        //printk(KERN_NOTICE "%d", read_cpuid(CPUID_ID));
+        //while(1);
 
 	setup_processor();
 	mdesc = setup_machine_fdt(__atags_pointer);
@@ -746,6 +764,12 @@ void __init setup_arch(char **cmdline_p)
 	init_mm.end_code   = (unsigned long) _etext;
 	init_mm.end_data   = (unsigned long) _edata;
 	init_mm.brk	   = (unsigned long) _end;
+
+#ifdef CONFIG_FERRET
+	serial = strstr(boot_command_line,"serial=");
+	if (serial != NULL)
+		strncpy(g_serial,serial+7,25);
+#endif
 
 	/* populate cmd_line too for later use, preserving boot_command_line */
 	strlcpy(cmd_line, boot_command_line, COMMAND_LINE_SIZE);

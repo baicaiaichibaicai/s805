@@ -3,12 +3,14 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 2010, 2011 Cavium Networks
+ * Copyright (C) 2010 - 2012 Cavium, Inc.
  */
 
-#include <linux/module.h>
+#include <linux/device.h>
+#include <linux/export.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
+#include <linux/of.h>
 
 #include <asm/octeon/octeon.h>
 #include <asm/octeon/cvmx-uctlx-defs.h>
@@ -17,13 +19,15 @@ static DEFINE_MUTEX(octeon2_usb_clocks_mutex);
 
 static int octeon2_usb_clock_start_cnt;
 
-void octeon2_usb_clocks_start(void)
+void octeon2_usb_clocks_start(struct device *dev)
 {
 	u64 div;
 	union cvmx_uctlx_if_ena if_ena;
 	union cvmx_uctlx_clk_rst_ctl clk_rst_ctl;
-	union cvmx_uctlx_uphy_ctl_status uphy_ctl_status;
 	union cvmx_uctlx_uphy_portx_ctl_status port_ctl_status;
+	struct device_node *uctl_node;
+	u32 clock_rate = 12000000;
+	bool is_crystal_clock = false;
 	int i;
 	unsigned long io_clk_64_to_ns;
 
@@ -36,6 +40,27 @@ void octeon2_usb_clocks_start(void)
 
 	io_clk_64_to_ns = 64000000000ull / octeon_get_io_clock_rate();
 
+	if (dev->of_node) {
+		const char *clock_type;
+
+		uctl_node = of_get_parent(dev->of_node);
+		if (!uctl_node) {
+			pr_err("No UCTL device node\n");
+			goto exit;
+		}
+		i = of_property_read_u32(uctl_node,
+					 "refclk-frequency", &clock_rate);
+		if (i) {
+			pr_err("No UCTL \"refclk-frequency\"\n");
+			goto exit;
+		}
+		i = of_property_read_string(uctl_node,
+					    "refclk-type", &clock_type);
+
+		if (!i && strcmp("crystal", clock_type) == 0)
+			is_crystal_clock = true;
+	}
+
 	/*
 	 * Step 1: Wait for voltages stable.  That surely happened
 	 * before starting the kernel.
@@ -45,6 +70,17 @@ void octeon2_usb_clocks_start(void)
 	if_ena.u64 = 0;
 	if_ena.s.en = 1;
 	cvmx_write_csr(CVMX_UCTLX_IF_ENA(0), if_ena.u64);
+
+	for (i = 0; i <= 1; i++) {
+		port_ctl_status.u64 =
+			cvmx_read_csr(CVMX_UCTLX_UPHY_PORTX_CTL_STATUS(i, 0));
+		/* Set txvreftune to 15 to obtain compliant 'eye' diagram. */
+		port_ctl_status.s.txvreftune = 15;
+		port_ctl_status.s.txrisetune = 1;
+		port_ctl_status.s.txpreemphasistune = 1;
+		cvmx_write_csr(CVMX_UCTLX_UPHY_PORTX_CTL_STATUS(i, 0),
+			       port_ctl_status.u64);
+	}
 
 	/* Step 3: Configure the reference clock, PHY, and HCLK */
 	clk_rst_ctl.u64 = cvmx_read_csr(CVMX_UCTLX_CLK_RST_CTL(0));
@@ -66,9 +102,22 @@ void octeon2_usb_clocks_start(void)
 	cvmx_write_csr(CVMX_UCTLX_CLK_RST_CTL(0), clk_rst_ctl.u64);
 
 	/* 3b */
-	/* 12MHz crystal. */
-	clk_rst_ctl.s.p_refclk_sel = 0;
-	clk_rst_ctl.s.p_refclk_div = 0;
+	clk_rst_ctl.s.p_refclk_sel = is_crystal_clock ? 0 : 1;
+	switch (clock_rate) {
+	default:
+		pr_err("Invalid UCTL clock rate of %u, using 12000000 instead\n",
+			clock_rate);
+		/* Fall through */
+	case 12000000:
+		clk_rst_ctl.s.p_refclk_div = 0;
+		break;
+	case 24000000:
+		clk_rst_ctl.s.p_refclk_div = 1;
+		break;
+	case 48000000:
+		clk_rst_ctl.s.p_refclk_div = 2;
+		break;
+	}
 	cvmx_write_csr(CVMX_UCTLX_CLK_RST_CTL(0), clk_rst_ctl.u64);
 
 	/* 3c */
@@ -120,29 +169,10 @@ void octeon2_usb_clocks_start(void)
 	clk_rst_ctl.s.p_por = 0;
 	cvmx_write_csr(CVMX_UCTLX_CLK_RST_CTL(0), clk_rst_ctl.u64);
 
-	/* Step 5:    Wait 1 ms for the PHY clock to start. */
-	mdelay(1);
+	/* Step 5:    Wait 3 ms for the PHY clock to start. */
+	mdelay(3);
 
-	/*
-	 * Step 6: Program the reset input from automatic test
-	 * equipment field in the UPHY CSR
-	 */
-	uphy_ctl_status.u64 = cvmx_read_csr(CVMX_UCTLX_UPHY_CTL_STATUS(0));
-	uphy_ctl_status.s.ate_reset = 1;
-	cvmx_write_csr(CVMX_UCTLX_UPHY_CTL_STATUS(0), uphy_ctl_status.u64);
-
-	/* Step 7: Wait for at least 10ns. */
-	ndelay(10);
-
-	/* Step 8: Clear the ATE_RESET field in the UPHY CSR. */
-	uphy_ctl_status.s.ate_reset = 0;
-	cvmx_write_csr(CVMX_UCTLX_UPHY_CTL_STATUS(0), uphy_ctl_status.u64);
-
-	/*
-	 * Step 9: Wait for at least 20ns for UPHY to output PHY clock
-	 * signals and OHCI_CLK48
-	 */
-	ndelay(20);
+	/* Steps 6..9 for ATE only, are skipped. */
 
 	/* Step 10: Configure the OHCI_CLK48 and OHCI_CLK12 clocks. */
 	/* 10a */
@@ -171,21 +201,10 @@ void octeon2_usb_clocks_start(void)
 	cvmx_write_csr(CVMX_UCTLX_CLK_RST_CTL(0), clk_rst_ctl.u64);
 
 end_clock:
-	/* Now we can set some other registers.  */
-
-	for (i = 0; i <= 1; i++) {
-		port_ctl_status.u64 =
-			cvmx_read_csr(CVMX_UCTLX_UPHY_PORTX_CTL_STATUS(i, 0));
-		/* Set txvreftune to 15 to obtain compliant 'eye' diagram. */
-		port_ctl_status.s.txvreftune = 15;
-		port_ctl_status.s.txrisetune = 1;
-		port_ctl_status.s.txpreemphasistune = 1;
-		cvmx_write_csr(CVMX_UCTLX_UPHY_PORTX_CTL_STATUS(i, 0),
-			       port_ctl_status.u64);
-	}
-
 	/* Set uSOF cycle period to 60,000 bits. */
 	cvmx_write_csr(CVMX_UCTLX_EHCI_FLA(0), 0x20ull);
+
+	octeon_error_tree_enable(CVMX_ERROR_GROUP_USB, -1);
 exit:
 	mutex_unlock(&octeon2_usb_clocks_mutex);
 }
@@ -195,6 +214,8 @@ void octeon2_usb_clocks_stop(void)
 {
 	mutex_lock(&octeon2_usb_clocks_mutex);
 	octeon2_usb_clock_start_cnt--;
+	if (octeon2_usb_clock_start_cnt == 0)
+		octeon_error_tree_disable(CVMX_ERROR_GROUP_USB, -1);
 	mutex_unlock(&octeon2_usb_clocks_mutex);
 }
 EXPORT_SYMBOL(octeon2_usb_clocks_stop);

@@ -27,17 +27,41 @@ static int test_rtc_set_alarm(struct device *dev,
 	return 0;
 }
 
+#ifdef CONFIG_MZEN
+extern int cmos_read_time(struct device *dev, struct rtc_time *t);
+extern int cmos_set_time(struct device *dev, struct rtc_time *t);
+#endif
+
 static int test_rtc_read_time(struct device *dev,
 	struct rtc_time *tm)
 {
+#if 0
+#ifdef CONFIG_MZEN
+        cmos_read_time(dev, tm);
+#else
 	rtc_time_to_tm(get_seconds(), tm);
+#endif
+#else
+	rtc_time_to_tm(get_seconds(), tm);
+#endif
 	return 0;
 }
 
 static int test_rtc_set_mmss(struct device *dev, unsigned long secs)
 {
+#if 0
+#ifdef CONFIG_MZEN
+        struct rtc_time tm;
+        rtc_time_to_tm(secs, &tm);
+        return cmos_set_time(dev, &tm);
+#else
 	dev_info(dev, "%s, secs = %lu\n", __func__, secs);
 	return 0;
+#endif
+#else
+	dev_info(dev, "%s, secs = %lu\n", __func__, secs);
+	return 0;
+#endif
 }
 
 static int test_rtc_proc(struct device *dev, struct seq_file *seq)

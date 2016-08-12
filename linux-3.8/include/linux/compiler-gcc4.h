@@ -66,6 +66,12 @@
 #define __compiletime_error(message) __attribute__((error(message)))
 #endif
 
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+# define asm_volatile_goto(x...)    do { asm goto(x); asm (""); } while (0)
+#endif
+
 #ifdef CONFIG_ARCH_USE_BUILTIN_BSWAP
 #if __GNUC_MINOR__ >= 4
 #define __HAVE_BUILTIN_BSWAP32__

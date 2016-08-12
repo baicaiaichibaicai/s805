@@ -27,6 +27,11 @@ config USB_XHCI_HCD
 	  To compile this driver as a module, choose M here: the
 	  module will be called xhci-hcd.
 
+config USB_XHCI_HCD_OCTEON
+  tristate
+  depends on USB_XHCI_HCD && OCTEON_FUTURE_BOARD
+  default y
+
 config USB_XHCI_PLATFORM
 	tristate
 	depends on USB_XHCI_HCD
@@ -244,6 +249,25 @@ config USB_EHCI_ATH79
 	  Enables support for the built-in EHCI controller present
 	  on the Atheros AR7XXX/AR9XXX SoCs.
 
+config USB_OCTEON_HCD
+	tristate "Octeon usb host driver"
+	depends on OCTEON_FUTURE_BOARD
+	default n
+		help
+			The Octeon DWC_OTG USB host controller.  All CN3XXX and
+			CN5XXX based chips with USB are supported.
+
+config USB_OCTEON_EHCI
+	bool "Octeon on-chip EHCI support"
+	depends on OCTEON_FUTURE_BOARD
+	default n
+	select USB_EHCI_BIG_ENDIAN_MMIO
+	help
+		Enable support for the Octeon II SOC's on-chip EHCI
+		controller.  It is needed for high-speed (480Mbit/sec)
+		USB 2.0 device support.  All CN6XXX based chips with USB are
+		supported.
+
 config USB_OXU210HP_HCD
 	tristate "OXU210HP HCD support"
 	depends on USB
@@ -438,6 +462,17 @@ config USB_EHCI_HCD_PLATFORM
 	  provides a memory space and an irq.
 
 	  If unsure, say N.
+
+config USB_OCTEON_OHCI
+	  bool "Octeon on-chip OHCI support"
+	  depends on OCTEON_FUTURE_BOARD 
+	  default USB_OCTEON_EHCI
+	  select USB_OHCI_BIG_ENDIAN_MMIO
+	  select USB_OHCI_LITTLE_ENDIAN
+	  help
+		  Enable support for the Octeon II SOC's on-chip OHCI
+		  controller.  It is needed for low-speed USB 1.0 device
+		  support.  All CN6XXX based chips with USB are supported.
 
 config USB_OHCI_BIG_ENDIAN_DESC
 	bool

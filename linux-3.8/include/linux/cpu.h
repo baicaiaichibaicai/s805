@@ -211,5 +211,14 @@ extern void enable_nonboot_cpus(void);
 static inline int disable_nonboot_cpus(void) { return 0; }
 static inline void enable_nonboot_cpus(void) {}
 #endif /* !CONFIG_PM_SLEEP_SMP */
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+enum cpuhp_state {
+	CPUHP_OFFLINE,
+	CPUHP_ONLINE,
+};
+void cpu_startup_entry(enum cpuhp_state state);
+#endif
 
 #endif /* _LINUX_CPU_H_ */

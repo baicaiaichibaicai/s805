@@ -64,4 +64,8 @@ extern struct sk_buff *arp_create(int type, int ptype, __be32 dest_ip,
 extern void arp_xmit(struct sk_buff *skb);
 int arp_invalidate(struct net_device *dev, __be32 ip);
 
+#if defined(CONFIG_OMNI_NAT_ARP_RESPONSE) || defined(CONFIG_OMNI_NAT_ARP_RESPONSE_MODULE)
+extern int (*omni_arp_filter_hook)(__be32 ipv4);
+#endif/*CONFIG_OMNI_NAT_ARP_RESPONSE*/
+
 #endif	/* _ARP_H */

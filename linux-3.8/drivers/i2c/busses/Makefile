@@ -2,6 +2,11 @@
 # Makefile for the i2c bus drivers.
 #
 
+# NFW Power Monitor driver
+ifdef CONFIG_X86
+obj-$(CONFIG_FERRET)		+= i2c-nfw-i801.o
+endif
+
 # ACPI drivers
 obj-$(CONFIG_I2C_SCMI)		+= i2c-scmi.o
 
@@ -33,6 +38,7 @@ obj-$(CONFIG_I2C_AU1550)	+= i2c-au1550.o
 obj-$(CONFIG_I2C_BLACKFIN_TWI)	+= i2c-bfin-twi.o
 obj-$(CONFIG_I2C_CBUS_GPIO)	+= i2c-cbus-gpio.o
 obj-$(CONFIG_I2C_CPM)		+= i2c-cpm.o
+obj-$(CONFIG_I2C_CS75XX)	+= i2c-cs75xx.o
 obj-$(CONFIG_I2C_DAVINCI)	+= i2c-davinci.o
 obj-$(CONFIG_I2C_DESIGNWARE_CORE)	+= i2c-designware-core.o
 obj-$(CONFIG_I2C_DESIGNWARE_PLATFORM)	+= i2c-designware-platform.o

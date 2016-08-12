@@ -115,7 +115,7 @@
 #define PTRS_PER_PTE	((PAGE_SIZE << PTE_ORDER) / sizeof(pte_t))
 
 #if PGDIR_SIZE >= TASK_SIZE64
-#define USER_PTRS_PER_PGD       (1)
+#define USER_PTRS_PER_PGD	(1)
 #else
 #define USER_PTRS_PER_PGD	(TASK_SIZE64 / PGDIR_SIZE)
 #endif
@@ -135,7 +135,12 @@
 #if defined(CONFIG_MODULES) && defined(KBUILD_64BIT_SYM32) && \
 	VMALLOC_START != CKSSEG
 /* Load modules into 32bit-compatible segment. */
-#define MODULE_START	CKSSEG
+#ifdef CONFIG_MAPPED_KERNEL
+extern unsigned long kernel_image_end;
+#define MODULE_START	kernel_image_end
+#else
+#define MODULE_START   CKSSEG
+#endif
 #define MODULE_END	(FIXADDR_START-2*PAGE_SIZE)
 #endif
 
@@ -288,7 +293,7 @@ static inline pte_t mk_swap_pte(unsigned long type, unsigned long offset)
 #define __swp_type(x)		(((x).val >> 32) & 0xff)
 #define __swp_offset(x)		((x).val >> 40)
 #define __swp_entry(type, offset) ((swp_entry_t) { pte_val(mk_swap_pte((type), (offset))) })
-#define __pte_to_swp_entry(pte)	((swp_entry_t) { pte_val(pte) })
+#define __pte_to_swp_entry(pte) ((swp_entry_t) { pte_val(pte) })
 #define __swp_entry_to_pte(x)	((pte_t) { (x).val })
 
 /*

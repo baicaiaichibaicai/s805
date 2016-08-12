@@ -113,6 +113,10 @@ extern void *__alloc_bootmem_low_node(pg_data_t *pgdat,
 
 #define alloc_bootmem(x) \
 	__alloc_bootmem(x, SMP_CACHE_BYTES, BOOTMEM_LOW_LIMIT)
+#ifdef CONFIG_X86_64
+#define alloc_bootmem_high(x) \
+	__alloc_bootmem(x, SMP_CACHE_BYTES, __pa(MAX_DMA32_ADDRESS))
+#endif
 #define alloc_bootmem_align(x, align) \
 	__alloc_bootmem(x, align, BOOTMEM_LOW_LIMIT)
 #define alloc_bootmem_nopanic(x) \

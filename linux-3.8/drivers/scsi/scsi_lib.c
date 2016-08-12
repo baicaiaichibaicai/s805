@@ -32,6 +32,11 @@
 #include "scsi_priv.h"
 #include "scsi_logging.h"
 
+#include <future/log/logevent.h>
+
+#if defined(CONFIG_ARM) || defined(CONFIG_MIPS)
+#include <linux/proc_fs.h>
+#endif
 
 #define SG_MEMPOOL_NR		ARRAY_SIZE(scsi_sg_pools)
 #define SG_MEMPOOL_SIZE		2
@@ -67,6 +72,8 @@ static struct scsi_host_sg_pool scsi_sg_pools[] = {
 #undef SP
 
 struct kmem_cache *scsi_sdb_cache;
+void system_log(u32 errer, char *desc);
+static int hwraid_proc_fault = 0;
 
 #ifdef CONFIG_ACPI
 #include <acpi/acpi_bus.h>
@@ -966,6 +973,10 @@ void scsi_io_completion(struct scsi_cmnd *cmd, unsigned int good_bytes)
 		}
 	} else {
 		description = "Unhandled error code";
+#if 0
+		system_log(LOG_SYSTEM_STATUS, "H/W RAID : Storage error (I/O error)");
+#endif
+		hwraid_proc_fault = 1 ;
 		action = ACTION_FAIL;
 	}
 
@@ -2617,3 +2628,32 @@ void scsi_kunmap_atomic_sg(void *virt)
 	kunmap_atomic(virt);
 }
 EXPORT_SYMBOL(scsi_kunmap_atomic_sg);
+
+static int hwraid_fault_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data)
+{
+	if( off > 0 )
+		return 0;
+	return sprintf(page, "%d\n", hwraid_proc_fault);
+}
+
+
+extern struct proc_dir_entry *proc_ferret_system;
+
+#if 0
+static int hwraid_fault_proc_init(void)
+{
+	struct proc_dir_entry *p = NULL;
+
+	p = create_proc_entry("hwraid_fault", 0, proc_ferret_system);
+	if (p == NULL) {
+		printk("Creating proc entry failed : /proc/ferret/system/hwraid_fault\n");
+		return -ENOMEM;
+	}
+
+	p->read_proc = hwraid_fault_proc_read;
+
+	return 0;
+}
+
+module_init(hwraid_fault_proc_init);
+#endif

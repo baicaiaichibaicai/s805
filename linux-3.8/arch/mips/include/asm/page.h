@@ -31,7 +31,7 @@
 #define PAGE_SHIFT	16
 #endif
 #define PAGE_SIZE	(_AC(1,UL) << PAGE_SHIFT)
-#define PAGE_MASK       (~(PAGE_SIZE - 1))
+#define PAGE_MASK	(~((1 << PAGE_SHIFT) - 1))
 
 #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
 #define HPAGE_SHIFT	(PAGE_SHIFT + PAGE_SHIFT - 3)
@@ -45,8 +45,9 @@
 #define HUGETLB_PAGE_ORDER	({BUILD_BUG(); 0; })
 #endif /* CONFIG_MIPS_HUGE_TLB_SUPPORT */
 
+#ifndef __ASSEMBLY__
+
 #include <linux/pfn.h>
-#include <asm/io.h>
 
 extern void build_clear_page(void);
 extern void build_copy_page(void);
@@ -95,11 +96,11 @@ extern void copy_user_highpage(struct page *to, struct page *from,
 #ifdef CONFIG_64BIT_PHYS_ADDR
   #ifdef CONFIG_CPU_MIPS32
     typedef struct { unsigned long pte_low, pte_high; } pte_t;
-    #define pte_val(x)    ((x).pte_low | ((unsigned long long)(x).pte_high << 32))
-    #define __pte(x)      ({ pte_t __pte = {(x), ((unsigned long long)(x)) >> 32}; __pte; })
+    #define pte_val(x)	  ((x).pte_low | ((unsigned long long)(x).pte_high << 32))
+    #define __pte(x)	  ({ pte_t __pte = {(x), (x) >> 32}; __pte; })
   #else
      typedef struct { unsigned long long pte; } pte_t;
-     #define pte_val(x)	((x).pte)
+     #define pte_val(x) ((x).pte)
      #define __pte(x)	((pte_t) { (x) } )
   #endif
 #else
@@ -141,16 +142,14 @@ typedef struct { unsigned long pgprot; } pgprot_t;
  * __pa()/__va() should be used only during mem init.
  */
 #ifdef CONFIG_64BIT
-#define __pa(x)								\
-({									\
-    unsigned long __x = (unsigned long)(x);				\
-    __x < CKSEG0 ? XPHYSADDR(__x) : CPHYSADDR(__x);			\
-})
+unsigned long __phys_addr(unsigned long x);
+#define __pa(x)	__phys_addr((unsigned long)x)
 #else
 #define __pa(x)								\
     ((unsigned long)(x) - PAGE_OFFSET + PHYS_OFFSET)
 #endif
 #define __va(x)		((void *)((unsigned long)(x) + PAGE_OFFSET - PHYS_OFFSET))
+#include <asm/io.h>
 
 /*
  * RELOC_HIDE was originally added by 6007b903dfe5f1d13e0c711ac2894bdd4a61b1ad
@@ -164,21 +163,25 @@ typedef struct { unsigned long pgprot; } pgprot_t;
  * until GCC 3.x has been retired before we can apply
  * https://patchwork.linux-mips.org/patch/1541/
  */
-
-#define __pa_symbol(x)	__pa(RELOC_HIDE((unsigned long)(x), 0))
+# ifdef CONFIG_MAPPED_KERNEL
+extern unsigned long phys_to_kernel_offset;
+#  define __pa_symbol(x)	(RELOC_HIDE((unsigned long)(x), 0) - phys_to_kernel_offset)
+# else
+#  define __pa_symbol(x)	__pa(RELOC_HIDE((unsigned long)(x), 0))
+# endif
+#endif /*__ASSEMBLY__*/
 
 #define pfn_to_kaddr(pfn)	__va((pfn) << PAGE_SHIFT)
 
 #ifdef CONFIG_FLATMEM
 
-#define pfn_valid(pfn)							\
-({									\
-	unsigned long __pfn = (pfn);					\
-	/* avoid <linux/bootmem.h> include hell */			\
-	extern unsigned long min_low_pfn;				\
-									\
-	__pfn >= min_low_pfn && __pfn < max_mapnr;			\
-})
+static inline int pfn_valid(unsigned long pfn)
+{
+	/* avoid <linux/mm.h> include hell */
+	extern unsigned long max_mapnr;
+
+	return pfn >= ARCH_PFN_OFFSET && pfn < max_mapnr;
+}
 
 #elif defined(CONFIG_SPARSEMEM)
 
@@ -191,11 +194,11 @@ typedef struct { unsigned long pgprot; } pgprot_t;
 	unsigned long __pfn = (pfn);					\
 	int __n = pfn_to_nid(__pfn);					\
 	((__n >= 0) ? (__pfn < NODE_DATA(__n)->node_start_pfn +		\
-	                       NODE_DATA(__n)->node_spanned_pages)	\
-	            : 0);						\
+			       NODE_DATA(__n)->node_spanned_pages)	\
+		    : 0);						\
 })
 
-#endif
+#endif /*defined(CONFIG_NEED_MULTIPLE_NODES)*/
 
 #define virt_to_page(kaddr)	pfn_to_page(PFN_DOWN(virt_to_phys(kaddr)))
 
@@ -206,7 +209,7 @@ extern int __virt_addr_valid(const volatile void *kaddr);
 #define VM_DATA_DEFAULT_FLAGS	(VM_READ | VM_WRITE | VM_EXEC | \
 				 VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC)
 
-#define UNCAC_ADDR(addr)	((addr) - PAGE_OFFSET + UNCAC_BASE + 	\
+#define UNCAC_ADDR(addr)	((addr) - PAGE_OFFSET + UNCAC_BASE +	\
 								PHYS_OFFSET)
 #define CAC_ADDR(addr)		((addr) - UNCAC_BASE + PAGE_OFFSET -	\
 								PHYS_OFFSET)

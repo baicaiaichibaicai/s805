@@ -74,6 +74,14 @@ config SATA_AHCI
 	  This option enables support for AHCI Serial ATA.
 
 	  If unsure, say N.
+config CS752X_AHCI
+	tristate "Golden-Gate AHCI support"
+	depends on ARCH_GOLDENGATE
+	default n
+	help
+	  This option enables support for Golden-Gate AHCI Serial ATA.
+
+	  If unsure, say N.
 
 config SATA_AHCI_PLATFORM
 	tristate "Platform AHCI SATA support"
@@ -131,6 +139,11 @@ config ATA_SFF
 	  disable this unneeded SFF support.
 
 	  If unsure, say Y.
+
+config SATA_OCTEON
+	tristate
+	depends on SATA_AHCI_PLATFORM && OCTEON_FUTURE_BOARD
+	default y
 
 if ATA_SFF
 

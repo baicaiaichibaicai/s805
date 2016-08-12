@@ -39,6 +39,22 @@ struct nfgenmsg {
 #define NFNL_SUBSYS_ID(x)	((x & 0xff00) >> 8)
 #define NFNL_MSG_TYPE(x)	(x & 0x00ff)
 
+#ifdef CONFIG_OMNI
+/* OMNI-PATH enabled */
+#define NFNL_SUBSYS_NONE                0
+#define NFNL_SUBSYS_CTNETLINK           1
+#define NFNL_SUBSYS_CTNETLINK_EXP       2
+#define NFNL_SUBSYS_QUEUE               3
+#define NFNL_SUBSYS_ULOG                4
+#define NFNL_SUBSYS_OSF                 5
+#define NFNL_SUBSYS_IPSET               6
+#define NFNL_SUBSYS_ACCT                7
+#define NFNL_SUBSYS_CTNETLINK_TIMEOUT   8
+#define NFNL_SUBSYS_CTHELPER            9
+#define NFNL_SUBSYS_OMNITRACK           10
+#define NFNL_SUBSYS_COUNT               11
+
+#else
 /* No enum here, otherwise __stringify() trick of MODULE_ALIAS_NFNL_SUBSYS()
  * won't work anymore */
 #define NFNL_SUBSYS_NONE 		0
@@ -52,5 +68,6 @@ struct nfgenmsg {
 #define NFNL_SUBSYS_CTNETLINK_TIMEOUT	8
 #define NFNL_SUBSYS_CTHELPER		9
 #define NFNL_SUBSYS_COUNT		10
+#endif
 
 #endif /* _UAPI_NFNETLINK_H */

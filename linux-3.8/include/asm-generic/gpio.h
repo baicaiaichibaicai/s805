@@ -48,6 +48,11 @@ struct seq_file;
 struct module;
 struct device_node;
 
+//odroid
+#ifdef CONFIG_PALT_MESON
+struct gpio_desc;
+#endif
+
 /**
  * struct gpio_chip - abstract a GPIO controller
  * @label: for diagnostics
@@ -99,6 +104,11 @@ struct gpio_chip {
 	struct device		*dev;
 	struct module		*owner;
 
+//odroid
+#ifdef CONFIG_PLAT_MESON
+	struct list_head        list;
+#endif
+
 	int			(*request)(struct gpio_chip *chip,
 						unsigned offset);
 	void			(*free)(struct gpio_chip *chip,
@@ -124,6 +134,7 @@ struct gpio_chip {
 						struct gpio_chip *chip);
 	int			base;
 	u16			ngpio;
+	struct gpio_desc        *desc;
 	const char		*const *names;
 	unsigned		can_sleep:1;
 	unsigned		exported:1;
@@ -270,6 +281,8 @@ static inline void gpio_unexport(unsigned gpio)
 }
 #endif	/* CONFIG_GPIO_SYSFS */
 
+
+#if 0
 #ifdef CONFIG_PINCTRL
 
 /**
@@ -306,5 +319,45 @@ gpiochip_remove_pin_ranges(struct gpio_chip *chip)
 }
 
 #endif /* CONFIG_PINCTRL */
+#endif
+
+#ifdef CONFIG_PLAT_MESON
+#if defined(CONFIG_PINCTRL)
+
+/**
+ * struct gpio_pin_range - pin range controlled by a gpio chip
+ * @head: list for maintaining set of pin ranges, used internally
+ * @pctldev: pinctrl device which handles corresponding pins
+ * @range: actual range of pins controlled by a gpio controller
+ */
+
+struct gpio_pin_range {
+	struct list_head node;
+	struct pinctrl_dev *pctldev;
+	struct pinctrl_gpio_range range;
+};
+
+int gpiochip_add_pin_range(struct gpio_chip *chip, const char *pinctl_name,
+			   unsigned int gpio_offset, unsigned int pin_offset,
+			   unsigned int npins);
+void gpiochip_remove_pin_ranges(struct gpio_chip *chip);
+
+#else
+
+static inline int
+gpiochip_add_pin_range(struct gpio_chip *chip, const char *pinctl_name,
+		       unsigned int gpio_offset, unsigned int pin_offset,
+		       unsigned int npins)
+{
+	return 0;
+}
+
+static inline void
+gpiochip_remove_pin_ranges(struct gpio_chip *chip)
+{
+}
+
+#endif /* CONFIG_PINCTRL */
+#endif
 
 #endif /* _ASM_GENERIC_GPIO_H */

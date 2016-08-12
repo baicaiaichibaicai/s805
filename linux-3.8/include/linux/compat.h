@@ -142,6 +142,23 @@ typedef struct {
 	compat_sigset_word	sig[_COMPAT_NSIG_WORDS];
 } compat_sigset_t;
 
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+struct compat_sigaction {
+#ifndef __ARCH_HAS_IRIX_SIGACTION
+	compat_uptr_t			sa_handler;
+	compat_ulong_t			sa_flags;
+#else
+	compat_uint_t			sa_flags;
+	compat_uptr_t			sa_handler;
+#endif
+#ifdef __ARCH_HAS_SA_RESTORER
+	compat_uptr_t			sa_restorer;
+#endif
+	compat_sigset_t			sa_mask __packed;
+};
+#endif
 /*
  * These functions operate strictly on struct compat_time*
  */
@@ -402,6 +419,11 @@ asmlinkage long compat_sys_adjtimex(struct compat_timex __user *utp);
 
 extern int compat_printk(const char *fmt, ...);
 extern void sigset_from_compat(sigset_t *set, compat_sigset_t *compat);
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+extern void sigset_to_compat(compat_sigset_t *compat, const sigset_t *set);
+#endif
 
 asmlinkage long compat_sys_migrate_pages(compat_pid_t pid,
 		compat_ulong_t maxnode, const compat_ulong_t __user *old_nodes,
@@ -508,6 +530,12 @@ asmlinkage long compat_sys_openat(unsigned int dfd, const char __user *filename,
 asmlinkage long compat_sys_open_by_handle_at(int mountdirfd,
 					     struct file_handle __user *handle,
 					     int flags);
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+asmlinkage long compat_sys_truncate(const char __user *, compat_off_t);
+asmlinkage long compat_sys_ftruncate(unsigned int, compat_ulong_t);
+#endif
 asmlinkage long compat_sys_pselect6(int n, compat_ulong_t __user *inp,
 				    compat_ulong_t __user *outp,
 				    compat_ulong_t __user *exp,
@@ -648,6 +676,18 @@ asmlinkage long compat_sys_sigaltstack(const compat_stack_t __user *uss_ptr,
 
 int compat_restore_altstack(const compat_stack_t __user *uss);
 int __compat_save_altstack(compat_stack_t __user *, unsigned long);
+//Modifed odorid
+#elif defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#elif defined(CONFIG_OCTEON_FUTURE_BOARD)
+int compat_restore_altstack(const compat_stack_t __user *uss);
+int __compat_save_altstack(compat_stack_t __user *, unsigned long);
+#define compat_save_altstack_ex(uss, sp) do { \
+	compat_stack_t __user *__uss = uss; \
+	struct task_struct *t = current; \
+	put_user_ex(ptr_to_compat((void __user *)t->sas_ss_sp), &__uss->ss_sp); \
+	put_user_ex(sas_ss_flags(sp), &__uss->ss_flags); \
+	put_user_ex(t->sas_ss_size, &__uss->ss_size); \
+} while (0);
 #endif
 
 asmlinkage long compat_sys_sched_rr_get_interval(compat_pid_t pid,

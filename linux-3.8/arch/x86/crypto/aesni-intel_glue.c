@@ -44,9 +44,13 @@
 #define HAS_CTR
 #endif
 
+#ifndef CONFIG_FERRET
+
 #if defined(CONFIG_CRYPTO_PCBC) || defined(CONFIG_CRYPTO_PCBC_MODULE)
 #define HAS_PCBC
 #endif
+
+#endif //CONFIG_FERRET
 
 /* This data is stored at the end of the crypto_tfm struct.
  * It's a type of per "session" data storage location.
@@ -750,6 +754,33 @@ static int rfc4106_set_authsize(struct crypto_aead *parent,
 	return 0;
 }
 
+#ifdef CONFIG_FERRET
+static int rfc4106_encrypt(struct aead_request *req)
+{
+	int ret;
+	struct crypto_aead *tfm = crypto_aead_reqtfm(req);
+	struct aesni_rfc4106_gcm_ctx *ctx = aesni_rfc4106_gcm_ctx_get(tfm);
+
+	struct crypto_aead *cryptd_child = cryptd_aead_child(ctx->cryptd_tfm);
+	kernel_fpu_begin();
+	ret = cryptd_child->base.crt_aead.encrypt(req);
+	kernel_fpu_end();
+	return ret;
+}
+
+static int rfc4106_decrypt(struct aead_request *req)
+{
+	int ret;
+	struct crypto_aead *tfm = crypto_aead_reqtfm(req);
+	struct aesni_rfc4106_gcm_ctx *ctx = aesni_rfc4106_gcm_ctx_get(tfm);
+
+	struct crypto_aead *cryptd_child = cryptd_aead_child(ctx->cryptd_tfm);
+	kernel_fpu_begin();
+	ret = cryptd_child->base.crt_aead.decrypt(req);
+	kernel_fpu_end();
+	return ret;
+}
+#else
 static int rfc4106_encrypt(struct aead_request *req)
 {
 	int ret;
@@ -791,7 +822,7 @@ static int rfc4106_decrypt(struct aead_request *req)
 		return ret;
 	}
 }
-
+#endif
 static int __driver_rfc4106_encrypt(struct aead_request *req)
 {
 	u8 one_entry_in_sg = 0;

@@ -27,6 +27,9 @@
 #define PTRACE_GETEVENTMSG	0x4201
 #define PTRACE_GETSIGINFO	0x4202
 #define PTRACE_SETSIGINFO	0x4203
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+#define PTRACE_LIVEDUMP 	0x4221
+#endif
 
 /*
  * Generic ptrace interface that exports the architecture specific regsets

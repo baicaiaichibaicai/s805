@@ -81,6 +81,11 @@
 #include "bond_3ad.h"
 #include "bond_alb.h"
 
+#ifdef CONFIG_FERRET
+#include <future/general.h>
+#include <future/command/print.h>
+#endif
+
 /*---------------------------- Module parameters ----------------------------*/
 
 /* monitor all links that often (in milliseconds). <=0 disables monitoring */
@@ -2915,6 +2920,10 @@ void bond_loadbalance_arp_mon(struct work_struct *work)
 		write_unlock_bh(&bond->curr_slave_lock);
 		unblock_netpoll_tx();
 	}
+#ifdef CONFIG_FERRET
+	    else
+			        bond_set_carrier(bond);
+#endif
 
 re_arm:
 	if (bond->params.arp_interval)
@@ -4987,6 +4996,154 @@ static void __exit bonding_exit(void)
 	WARN_ON(atomic_read(&netpoll_block_tx));
 #endif
 }
+
+#ifdef CONFIG_FERRET
+void show_bonding_info(void)
+{
+	struct bond_net *bn = net_generic(&init_net, bond_net_id);
+	struct bonding *bond;
+	struct slave *slave;
+	struct slave *curr;
+	int i;
+	u32 target, bond_state = 0;
+
+	rcu_read_lock();
+	list_for_each_entry(bond, &bn->dev_list, bond_list) {
+
+		/* make sure the bond won't be taken away */
+		read_lock_bh(&bond->lock);
+
+		/* show master info */
+
+		debug(DL_SLOG, "\n###  %s  ###\n", bond->dev->name);
+
+		read_lock(&bond->curr_slave_lock);
+		curr = bond->curr_active_slave;
+		read_unlock(&bond->curr_slave_lock);
+
+		debug(DL_SLOG, "Bonding Mode: %s\n",
+				bond_mode_name(bond->params.mode));
+
+		if (bond->params.mode == BOND_MODE_XOR ||
+				bond->params.mode == BOND_MODE_8023AD) {
+			debug(DL_SLOG, "Transmit Hash Policy: %s (%d)\n",
+					xmit_hashtype_tbl[bond->params.xmit_policy].modename,
+					bond->params.xmit_policy);
+		}
+
+		if (USES_PRIMARY(bond->params.mode)) {
+			debug(DL_SLOG, "Primary Slave: %s\n",
+					(bond->primary_slave) ?
+					bond->primary_slave->dev->name : "None");
+
+			debug(DL_SLOG, "Currently Active Slave: %s\n",
+					(curr) ? curr->dev->name : "None");
+		}
+
+		bond_for_each_slave(bond, slave, i) {
+			if (slave->speed <= 10) {
+				bond_state = 0;
+			} else {
+				if (slave->link == BOND_LINK_UP) { bond_state = 1; break; }
+			}
+		}
+		if (bond_state)
+			debug(DL_SLOG, "Mii Status: %s\n", netif_carrier_ok(bond->dev) ?
+					"up" : "down");
+		else
+			debug(DL_SLOG, "Mii Status: down\n");
+		debug(DL_SLOG, "MII Polling Interval (ms): %d\n", bond->params.miimon);
+		debug(DL_SLOG, "Up Delay (ms): %d\n",
+				bond->params.updelay * bond->params.miimon);
+		debug(DL_SLOG, "Down Delay (ms): %d\n",
+				bond->params.downdelay * bond->params.miimon);
+		/* ARP information */
+		if(bond->params.arp_interval > 0) {
+			int printed=0;
+			debug(DL_SLOG, "ARP Polling Interval (ms): %d\n",
+					bond->params.arp_interval);
+
+			debug(DL_SLOG, "ARP IP target/s (n.n.n.n form):");
+
+			for(i = 0; (i < BOND_MAX_ARP_TARGETS) ;i++) {
+				if (!bond->params.arp_targets[i])
+					continue;
+				if (printed)
+					debug(DL_SLOG, ",");
+				target = ntohl(bond->params.arp_targets[i]);
+				debug(DL_SLOG, " %d.%d.%d.%d", ((unsigned char *)&target)[3], \
+						((unsigned char *)&target)[2], \
+						((unsigned char *)&target)[1], \
+						((unsigned char *)&target)[0]);
+				printed = 1;
+			}
+			debug(DL_SLOG, "\n");
+		}
+
+		if (bond->params.mode == BOND_MODE_8023AD) {
+			struct ad_info ad_info;
+
+			debug(DL_SLOG, "\n802.3ad info\n");
+			debug(DL_SLOG, "LACP rate: %s\n",
+					(bond->params.lacp_fast) ? "fast" : "slow");
+
+			if (bond_3ad_get_active_agg_info(bond, &ad_info)) {
+				debug(DL_SLOG, "bond %s has no active aggregator\n",
+						bond->dev->name);
+			} else {
+				debug(DL_SLOG, "Active Aggregator Info:\n");
+
+				debug(DL_SLOG, "\tAggregator ID: %d\n",
+						ad_info.aggregator_id);
+				debug(DL_SLOG, "\tNumber of ports: %d\n",
+						ad_info.ports);
+				debug(DL_SLOG, "\tActor Key: %d\n",
+						ad_info.actor_key);
+				debug(DL_SLOG, "\tPartner Key: %d\n",
+						ad_info.partner_key);
+				debug(DL_SLOG, "\tPartner Mac Address: %02x:%02x:%02x:%02x:%02x:%02x\n",
+						ad_info.partner_system[0],
+						ad_info.partner_system[1],
+						ad_info.partner_system[2],
+						ad_info.partner_system[3],
+						ad_info.partner_system[4],
+						ad_info.partner_system[5]);
+			}
+		}
+		bond_for_each_slave(bond, slave, i) {
+			debug(DL_SLOG, "\nSlave Interface: %s\n", slave->dev->name);
+			if (slave->speed <= 10) {
+				debug(DL_SLOG, "MII Status: down\n");
+			} else {
+				debug(DL_SLOG, "MII Status: %s\n",
+						(slave->link == BOND_LINK_UP) ?  "up" : "down");
+			}
+			debug(DL_SLOG, "Link Failure Count: %u\n",
+					slave->link_failure_count);
+
+			debug(DL_SLOG,
+					"Permanent HW addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
+					slave->perm_hwaddr[0], slave->perm_hwaddr[1],
+					slave->perm_hwaddr[2], slave->perm_hwaddr[3],
+					slave->perm_hwaddr[4], slave->perm_hwaddr[5]);
+
+			if (bond->params.mode == BOND_MODE_8023AD) {
+				const struct aggregator *agg
+					= SLAVE_AD_INFO(slave).port.aggregator;
+
+				if (agg) {
+					debug(DL_SLOG, "Aggregator ID: %d\n",
+							agg->aggregator_identifier);
+				} else {
+					debug(DL_SLOG, "Aggregator ID: N/A\n");
+				}
+			}
+		}
+		read_unlock_bh(&bond->lock);
+	}
+	rcu_read_unlock();
+}
+#endif
 
 module_init(bonding_init);
 module_exit(bonding_exit);

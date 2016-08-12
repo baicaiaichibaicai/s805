@@ -28,14 +28,18 @@
  * But this only means we'll force a reschedule every 8 seconds or so,
  * which isn't an evil thing.
  *
- * We know that all SMP capable CPUs have cycle counters.
+ * We know that all CONFIG_CEVT_R4K_LIB kernels support cycle counters.
  */
 
 typedef unsigned int cycles_t;
 
 static inline cycles_t get_cycles(void)
 {
+#ifdef CONFIG_CEVT_R4K_LIB
+	return read_c0_count();
+#else
 	return 0;
+#endif
 }
 
 #endif /* __KERNEL__ */

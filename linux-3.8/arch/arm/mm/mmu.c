@@ -707,13 +707,15 @@ static void __init create_mapping(struct map_desc *md)
 		return;
 	}
 
+#ifndef	CONFIG_ARCH_GOLDENGATE
 	if ((md->type == MT_DEVICE || md->type == MT_ROM) &&
 	    md->virtual >= PAGE_OFFSET &&
 	    (md->virtual < VMALLOC_START || md->virtual >= VMALLOC_END)) {
 		printk(KERN_WARNING "BUG: mapping for 0x%08llx"
-		       " at 0x%08lx out of vmalloc space\n",
-		       (long long)__pfn_to_phys((u64)md->pfn), md->virtual);
+		       " at 0x%08lx out of vmalloc space(0x%08lx, 0x%08lx)\n",
+		       (long long)__pfn_to_phys((u64)md->pfn), md->virtual, VMALLOC_START, VMALLOC_END);
 	}
+#endif
 
 	type = &mem_types[md->type];
 

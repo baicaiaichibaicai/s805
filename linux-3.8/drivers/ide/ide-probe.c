@@ -39,6 +39,10 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 
+#ifdef CONFIG_FERRET
+#include <future/general.h>
+#endif
+
 /**
  *	generic_id		-	add a generic drive id
  *	@drive:	drive to make an ID block for

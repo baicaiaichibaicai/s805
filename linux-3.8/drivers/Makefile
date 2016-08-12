@@ -146,3 +146,7 @@ obj-$(CONFIG_MEMORY)		+= memory/
 obj-$(CONFIG_IIO)		+= iio/
 obj-$(CONFIG_VME_BUS)		+= vme/
 obj-$(CONFIG_IPACK_BUS)		+= ipack/
+obj-$(CONFIG_PLCM_DRV)     += plcm_drv/
+obj-$(CONFIG_PLAT_MESON) 	+= amlogic/
+
+obj-$(CONFIG_MACH_MESON8B_ODROIDC) += hardkernel/

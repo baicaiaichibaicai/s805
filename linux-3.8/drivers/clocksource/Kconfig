@@ -1,3 +1,6 @@
+config CLKSRC_OF
+	bool
+
 config CLKSRC_I8253
 	bool
 
@@ -54,6 +57,9 @@ config CLKSRC_DBX500_PRCMU_SCHED_CLOCK
 	help
 	  Use the always on PRCMU Timer as sched_clock
 
+config ARM_ARCH_TIMER
+	bool
+	select CLKSRC_OF if OF
 config CLKSRC_ARM_GENERIC
 	def_bool y if ARM64
 	help

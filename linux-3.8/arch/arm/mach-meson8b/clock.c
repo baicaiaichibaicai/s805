@@ -456,7 +456,7 @@ int meson_clk_set_rate(struct clk *clk, unsigned long rate)
 	      spin_lock_irqsave(&clockfw_lock, flags);
 	  else
 	      spin_lock(&clockfw_lock);
-//		printk(KERN_INFO "%s() clk=%p rate=%lu\n", __FUNCTION__, clk, rate);
+		//printk(KERN_INFO "%s() clk=%p rate=%lu\n", __FUNCTION__, clk, rate);
 	  if(clk->set_rate)
 	  	ret = clk->set_rate(clk, rate) ;
 	  if (!clk->open_irq)

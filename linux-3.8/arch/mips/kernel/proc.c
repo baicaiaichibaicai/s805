@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 1995, 1996, 2001  Ralf Baechle
  *  Copyright (C) 2001, 2004  MIPS Technologies, Inc.
- *  Copyright (C) 2004  Maciej W. Rozycki
+ *  Copyright (C) 2004	Maciej W. Rozycki
  */
 #include <linux/delay.h>
 #include <linux/kernel.h>
@@ -10,17 +10,23 @@
 #include <asm/bootinfo.h>
 #include <asm/cpu.h>
 #include <asm/cpu-features.h>
+#include <asm/idle.h>
 #include <asm/mipsregs.h>
 #include <asm/processor.h>
-#include <asm/mips_machine.h>
+#include <asm/prom.h>
 
 unsigned int vced_count, vcei_count;
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+uint64_t octeon_get_clock_rate(void);
+#endif
 
 static int show_cpuinfo(struct seq_file *m, void *v)
 {
 	unsigned long n = (unsigned long) v - 1;
+#ifndef CONFIG_OCTEON_FUTURE_BOARD
 	unsigned int version = cpu_data[n].processor_id;
 	unsigned int fp_vers = cpu_data[n].fpu_id;
+#endif
 	char fmt [64];
 	int i;
 
@@ -40,11 +46,16 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 	}
 
 	seq_printf(m, "processor\t\t: %ld\n", n);
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+	seq_printf(m, "cpu model\t\t: %s\n", "MIPS");
+	seq_printf(m, "cpu MHz\t\t\t: %Ld\n", octeon_get_clock_rate()/1000000);
+#else
 	sprintf(fmt, "cpu model\t\t: %%s V%%d.%%d%s\n",
 		      cpu_data[n].options & MIPS_CPU_FPU ? "  FPU V%d.%d" : "");
 	seq_printf(m, fmt, __cpu_name[n],
 		      (version >> 4) & 0x0f, version & 0x0f,
 		      (fp_vers >> 4) & 0x0f, fp_vers & 0x0f);
+#endif
 	seq_printf(m, "BogoMIPS\t\t: %u.%02u\n",
 		      cpu_data[n].udelay_val / (500000/HZ),
 		      (cpu_data[n].udelay_val / (5000/HZ)) % 100);
@@ -64,6 +75,28 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 				cpu_data[n].watch_reg_masks[i]);
 		seq_printf(m, "]\n");
 	}
+	if (cpu_has_mips_r) {
+		seq_printf(m, "isa\t\t\t:");
+		if (cpu_has_mips_1)
+			seq_printf(m, "%s", " mips1");
+		if (cpu_has_mips_2)
+			seq_printf(m, "%s", " mips2");
+		if (cpu_has_mips_3)
+			seq_printf(m, "%s", " mips3");
+		if (cpu_has_mips_4)
+			seq_printf(m, "%s", " mips4");
+		if (cpu_has_mips_5)
+			seq_printf(m, "%s", " mips5");
+		if (cpu_has_mips32r1)
+			seq_printf(m, "%s", " mips32r1");
+		if (cpu_has_mips32r2)
+			seq_printf(m, "%s", " mips32r2");
+		if (cpu_has_mips64r1)
+			seq_printf(m, "%s", " mips64r1");
+		if (cpu_has_mips64r2)
+			seq_printf(m, "%s", " mips64r2");
+		seq_printf(m, "\n");
+	}
 
 	seq_printf(m, "ASEs implemented\t:");
 	if (cpu_has_mips16)	seq_printf(m, "%s", " mips16");
@@ -73,8 +106,14 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 	if (cpu_has_dsp)	seq_printf(m, "%s", " dsp");
 	if (cpu_has_dsp2)	seq_printf(m, "%s", " dsp2");
 	if (cpu_has_mipsmt)	seq_printf(m, "%s", " mt");
+	if (cpu_has_mmips)	seq_printf(m, "%s", " micromips");
+	if (cpu_has_vz)		seq_printf(m, "%s", " vz");
 	seq_printf(m, "\n");
 
+	if (cpu_has_mmips) {
+		seq_printf(m, "micromips kernel\t: %s\n",
+		      (read_c0_config3() & MIPS_CONF3_ISA_OE) ?  "yes" : "no");
+	}
 	seq_printf(m, "shadow register sets\t: %d\n",
 		      cpu_data[n].srsets);
 	seq_printf(m, "kscratch registers\t: %d\n",

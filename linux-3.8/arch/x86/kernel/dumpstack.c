@@ -17,6 +17,11 @@
 #include <linux/sysfs.h>
 
 #include <asm/stacktrace.h>
+#ifdef CONFIG_FERRET
+#include <future/general.h>
+extern void machine_emergency_restart(void);
+extern int is_exception_occur;
+#endif
 
 
 int panic_on_unrecovered_nmi;
@@ -217,6 +222,14 @@ unsigned __kprobes long oops_begin(void)
 		else
 			arch_spin_lock(&die_lock);
 	}
+
+#ifdef CONFIG_FERRET
+	if (!is_exception_occur) {
+		is_exception_occur = 1;
+		flush_print_msg();
+	}
+#endif
+
 	die_nest_count++;
 	die_owner = cpu;
 	console_verbose();
@@ -227,6 +240,13 @@ EXPORT_SYMBOL_GPL(oops_begin);
 
 void __kprobes oops_end(unsigned long flags, struct pt_regs *regs, int signr)
 {
+#ifdef CONFIG_FERRET
+	if (is_exception_occur) {
+		flush_sram_debug();
+		machine_emergency_restart();
+	}
+#endif
+
 	if (regs && kexec_should_crash(current))
 		crash_kexec(regs);
 
@@ -242,6 +262,7 @@ void __kprobes oops_end(unsigned long flags, struct pt_regs *regs, int signr)
 
 	if (!signr)
 		return;
+
 	if (in_interrupt())
 		panic("Fatal exception in interrupt");
 	if (panic_on_oops)

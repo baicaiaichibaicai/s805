@@ -1103,11 +1103,14 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 
 		portstatus = portchange = 0;
 		status = hub_port_status(hub, port1, &portstatus, &portchange);
+		
+#ifndef CONFIG_FERRET
 		if (udev || (portstatus & USB_PORT_STAT_CONNECTION))
 			dev_dbg(hub->intfdev,
 					"port %d: status %04x change %04x\n",
 					port1, portstatus, portchange);
-
+#endif
+		
 		/* After anything other than HUB_RESUME (i.e., initialization
 		 * or any sort of reset), every port should be disabled.
 		 * Unconnected ports should likewise be disabled (paranoia),
@@ -2061,10 +2064,19 @@ void usb_disconnect(struct usb_device **pdev)
 	 * this device (and any of its children) will fail immediately.
 	 * this quiesces everything except pending urbs.
 	 */
-	usb_set_device_state(udev, USB_STATE_NOTATTACHED);
-	dev_info(&udev->dev, "USB disconnect, device number %d\n",
-			udev->devnum);
 
+
+	usb_set_device_state(udev, USB_STATE_NOTATTACHED);
+#ifdef CONFIG_FERRET
+	if ((udev->descriptor.idVendor != 0x1fc9) && ( udev->descriptor.idProduct != 0x1000))
+		dev_info(&udev->dev, "USB disconnect, device number %d\n",
+			udev->devnum);
+#else
+dev_info(&udev->dev, "USB disconnect, device number %d\n",
+		            udev->devnum);
+#endif
+
+	
 	usb_lock_device(udev);
 
 	/* Free up all the children before we remove this device */
@@ -2077,7 +2089,15 @@ void usb_disconnect(struct usb_device **pdev)
 	 * cleaning up all state associated with the current configuration
 	 * so that the hardware is now fully quiesced.
 	 */
-	dev_dbg (&udev->dev, "unregistering device\n");
+
+#ifdef CONFIG_FERRET
+	 if ((udev->descriptor.idVendor != 0x1fc9) && ( udev->descriptor.idProduct != 0x1000))
+		 dev_dbg (&udev->dev, "unregistering device\n");
+#else
+	 dev_dbg (&udev->dev, "unregistering device\n");
+#endif
+
+
 	usb_disable_device(udev, 0);
 	usb_hcd_synchronize_unlinks(udev);
 
@@ -2110,11 +2130,20 @@ static void show_string(struct usb_device *udev, char *id, char *string)
 {
 	if (!string)
 		return;
+#ifdef CONFIG_FERRET
+	if ((udev->descriptor.idVendor != 0x1fc9) && ( udev->descriptor.idProduct != 0x1000))
+		dev_info(&udev->dev, "%s: %s\n", id, string);
+#else
 	dev_info(&udev->dev, "%s: %s\n", id, string);
+#endif 
 }
 
 static void announce_device(struct usb_device *udev)
 {
+	
+#ifdef CONFIG_FERRET
+	if ((udev->descriptor.idVendor != 0x1fc9) && ( udev->descriptor.idProduct != 0x1000))
+	{
 	dev_info(&udev->dev, "New USB device found, idVendor=%04x, idProduct=%04x\n",
 		le16_to_cpu(udev->descriptor.idVendor),
 		le16_to_cpu(udev->descriptor.idProduct));
@@ -2126,6 +2155,21 @@ static void announce_device(struct usb_device *udev)
 	show_string(udev, "Product", udev->product);
 	show_string(udev, "Manufacturer", udev->manufacturer);
 	show_string(udev, "SerialNumber", udev->serial);
+	}
+
+#else
+	dev_info(&udev->dev, "New USB device found, idVendor=%04x, idProduct=%04x\n",
+			         le16_to_cpu(udev->descriptor.idVendor),
+					         le16_to_cpu(udev->descriptor.idProduct));
+	dev_info(&udev->dev, "New USB device strings: Mfr=%d, Product=%d, SerialNumber=%d\n",
+			udev->descriptor.iManufacturer,
+			udev->descriptor.iProduct,
+			udev->descriptor.iSerialNumber);
+	show_string(udev, "Product", udev->product);
+	show_string(udev, "Manufacturer", udev->manufacturer);
+	show_string(udev, "SerialNumber", udev->serial);
+#endif
+
 }
 #else
 static inline void announce_device(struct usb_device *udev) { }
@@ -2335,9 +2379,17 @@ int usb_new_device(struct usb_device *udev)
 	err = usb_enumerate_device(udev);	/* Read descriptors */
 	if (err < 0)
 		goto fail;
+
+#ifdef CONFIG_FERRET
+	if ((udev->descriptor.idVendor != 0x1fc9) && ( udev->descriptor.idProduct != 0x1000))
 	dev_dbg(&udev->dev, "udev %d, busnum %d, minor = %d\n",
 			udev->devnum, udev->bus->busnum,
 			(((udev->bus->busnum-1) * 128) + (udev->devnum-1)));
+#else
+	dev_dbg(&udev->dev, "udev %d, busnum %d, minor = %d\n", udev->devnum, udev->bus->busnum,
+					            (((udev->bus->busnum-1) * 128) + (udev->devnum-1)));
+#endif
+
 	/* export the usbdev device-node for libusb */
 	udev->dev.devt = MKDEV(USB_DEVICE_MAJOR,
 			(((udev->bus->busnum-1) * 128) + (udev->devnum-1)));
@@ -2460,13 +2512,24 @@ int usb_authorize_device(struct usb_device *usb_dev)
 	if (c >= 0) {
 		result = usb_set_configuration(usb_dev, c);
 		if (result) {
+#ifdef CONFIG_FERRET
+			if ((usb_dev->descriptor.idVendor != 0x1fc9) && ( usb_dev->descriptor.idProduct != 0x1000))
 			dev_err(&usb_dev->dev,
 				"can't set config #%d, error %d\n", c, result);
+#else
+			dev_err(&usb_dev->dev,"can't set config #%d, error %d\n", c, result);
+#endif
+
 			/* This need not be fatal.  The user can try to
 			 * set other configurations. */
 		}
 	}
+#ifdef CONFIG_FERRET
+	if ((usb_dev->descriptor.idVendor != 0x1fc9) && ( usb_dev->descriptor.idProduct != 0x1000))
 	dev_info(&usb_dev->dev, "authorized to connect\n");
+#else
+	dev_info(&usb_dev->dev, "authorized to connect\n");
+#endif
 
 error_enumerate:
 error_device_descriptor:
@@ -2610,9 +2673,9 @@ delay:
 		if (delay_time >= 2 * HUB_SHORT_RESET_TIME)
 			delay = HUB_LONG_RESET_TIME;
 
-		dev_dbg (hub->intfdev,
-			"port %d not %sreset yet, waiting %dms\n",
-			port1, warm ? "warm " : "", delay);
+#ifndef CONFIG_FERRET
+		dev_dbg (hub->intfdev, "port %d not %sreset yet, waiting %dms\n", port1, warm ? "warm " : "", delay);
+#endif
 	}
 
 	return -EBUSY;
@@ -3858,9 +3921,12 @@ static int hub_port_debounce(struct usb_hub *hub, int port1)
 		msleep(HUB_DEBOUNCE_STEP);
 	}
 
+#ifndef CONFIG_FERRET
 	dev_dbg (hub->intfdev,
 		"debounce: port %d: total %dms stable %dms status 0x%x\n",
 		port1, total_time, stable_time, portstatus);
+#endif
+	
 
 	if (stable_time < HUB_DEBOUNCE_STABLE)
 		return -ETIMEDOUT;
@@ -3994,11 +4060,14 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 	else
 		speed = usb_speed_string(udev->speed);
 
+	
+#ifndef CONFIG_FERRET
 	if (udev->speed != USB_SPEED_SUPER)
 		dev_info(&udev->dev,
 				"%s %s USB device number %d using %s\n",
 				(udev->config) ? "reset" : "new", speed,
 				devnum, udev->bus->controller->driver->name);
+#endif
 
 	/* Set up TT records, if needed  */
 	if (hdev->tt) {
@@ -4102,9 +4171,11 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 				msleep(200);
 			}
 			if (retval < 0) {
+#ifndef CONFIG_FERRET
 				dev_err(&udev->dev,
 					"device not accepting address %d, error %d\n",
 					devnum, retval);
+#endif
 				goto fail;
 			}
 			if (udev->speed == USB_SPEED_SUPER) {
@@ -4291,9 +4362,11 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 	struct usb_device *udev;
 	int status, i;
 
+#ifndef CONFIG_FERRET
 	dev_dbg (hub_dev,
 		"port %d, status %04x, change %04x, %s\n",
 		port1, portstatus, portchange, portspeed(hub, portstatus));
+#endif
 
 	if (hub->has_indicators) {
 		set_port_led(hub, port1, HUB_LED_AUTO);
@@ -4355,9 +4428,13 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 				USB_PORT_STAT_C_ENABLE)) {
 		status = hub_port_debounce(hub, port1);
 		if (status < 0) {
+
+#ifndef CONFIG_FERRET
 			if (printk_ratelimit())
 				dev_err(hub_dev, "connect-debounce failed, "
 						"port %d disabled\n", port1);
+#endif
+			
 			portstatus &= ~USB_PORT_STAT_CONNECTION;
 		} else {
 			portstatus = status;
@@ -4502,11 +4579,15 @@ loop:
 		if ((status == -ENOTCONN) || (status == -ENOTSUPP))
 			break;
 	}
+
+#ifndef CONFIG_FERRET
 	if (hub->hdev->parent ||
 			!hcd->driver->port_handed_over ||
 			!(hcd->driver->port_handed_over)(hcd, port1))
 		dev_err(hub_dev, "unable to enumerate USB device on port %d\n",
 				port1);
+#endif
+
  
 done:
 	hub_port_disable(hub, port1, 1);
@@ -4593,13 +4674,17 @@ static void hub_events(void)
 		hdev = hub->hdev;
 		hub_dev = hub->intfdev;
 		intf = to_usb_interface(hub_dev);
+
+#ifndef CONFIG_FERRET
 		dev_dbg(hub_dev, "state %d ports %d chg %04x evt %04x\n",
 				hdev->state, hub->descriptor
 					? hub->descriptor->bNbrPorts
 					: 0,
-				/* NOTE: expects max 15 ports... */
+	
 				(u16) hub->change_bits[0],
 				(u16) hub->event_bits[0]);
+		
+#endif
 
 		/* Lock the device, then check to see if we were
 		 * disconnected while waiting for the lock to succeed. */
@@ -4662,11 +4747,15 @@ static void hub_events(void)
 			}
 
 			if (portchange & USB_PORT_STAT_C_ENABLE) {
+				
+#ifndef CONFIG_FERRET
 				if (!connect_change)
 					dev_dbg (hub_dev,
 						"port %d enable change, "
 						"status %08x\n",
 						i, portstatus);
+#endif
+			
 				clear_port_feature(hdev, i,
 					USB_PORT_FEAT_C_ENABLE);
 

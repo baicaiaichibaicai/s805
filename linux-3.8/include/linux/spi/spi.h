@@ -296,6 +296,9 @@ struct spi_master {
 	/* spi_device.mode flags understood by this controller driver */
 	u16			mode_bits;
 
+	/* bitmask of supported bits_per_word for transfers */
+	u32			bits_per_word_mask;
+
 	/* other constraints relevant to this driver */
 	u16			flags;
 #define SPI_MASTER_HALF_DUPLEX	BIT(0)		/* can't do full duplex */

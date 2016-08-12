@@ -39,7 +39,8 @@ struct gpio {
 	const char	*label;
 };
 
-#ifdef CONFIG_GENERIC_GPIO
+//Add odroid
+#if defined(CONFIG_GENERIC_GPIO) || defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
 
 #ifdef CONFIG_ARCH_HAVE_CUSTOM_GPIO_H
 #include <asm/gpio.h>
@@ -247,5 +248,15 @@ gpiochip_remove_pin_ranges(struct gpio_chip *chip)
 }
 
 #endif /* ! CONFIG_GENERIC_GPIO */
+
+//odroid
+struct device;
+
+/* bindings for managed devices that want to request gpios */
+int devm_gpio_request(struct device *dev, unsigned gpio, const char *label);
+int devm_gpio_request_one(struct device *dev, unsigned gpio,
+			  unsigned long flags, const char *label);
+void devm_gpio_free(struct device *dev, unsigned int gpio);
+
 
 #endif /* __LINUX_GPIO_H */

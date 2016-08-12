@@ -31,6 +31,12 @@
 
 #include "usb.h"
 
+#ifdef CONFIG_USB_SUSPEND
+extern int cs752x_ehci_suspend(struct device *dev);
+extern int cs752x_ehci_resume(struct device *dev);
+#endif
+
+#ifdef CONFIG_HOTPLUG
 
 /*
  * Adds a new dynamic USBdevice ID to this driver,
@@ -192,6 +198,20 @@ static void usb_free_dynids(struct usb_driver *usb_drv)
 	}
 	spin_unlock(&usb_drv->dynids.lock);
 }
+#else
+static inline int usb_create_newid_files(struct usb_driver *usb_drv)
+{
+	return 0;
+}
+
+static void usb_remove_newid_files(struct usb_driver *usb_drv)
+{
+}
+
+static inline void usb_free_dynids(struct usb_driver *usb_drv)
+{
+}
+#endif
 
 static const struct usb_device_id *usb_match_dynamic_id(struct usb_interface *intf,
 							struct usb_driver *drv)
@@ -1774,6 +1794,107 @@ int usb_set_usb2_hardware_lpm(struct usb_device *udev, int enable)
 
 	return ret;
 }
+
+int dvr_suspend(struct device *dev)
+{
+	return 0;
+}
+
+int dvr_resume(struct device *dev)
+{
+	return 0;
+}
+
+int dvr_runtime_suspend(struct device *dev)
+{
+	int	status = 0;
+
+#ifdef ARCH_GOLDENGATE	// shoh, 2014/06/17
+	if(dev->driver && strstr(dev->driver->name,"usb-storage"))
+	{
+		struct device *tdev=NULL;
+		cs752x_ehci_suspend(tdev);
+	}
+#endif
+	if (is_usb_device(dev)) {
+		struct usb_device	*udev = to_usb_device(dev);
+
+		if (autosuspend_check(udev) != 0)
+			return -EAGAIN;
+
+		/* If an interface fails the suspend, adjust the last_busy
+		 * time so that we don't get another suspend attempt right
+		 * away.
+		 */
+		if (status) {
+			dev->power.last_busy = jiffies +
+					(dev->power.autosuspend_delay == 0 ?
+						HZ/2 : 0);
+		}
+
+		/* Prevent the parent from suspending immediately after */
+		else if (udev->parent)
+			dev->parent->power.last_busy = jiffies;
+	}
+
+	/* Runtime suspend for a USB interface doesn't mean anything. */
+	return status;
+
+}
+
+int dvr_runtime_resume(struct device *dev)
+{
+
+#ifdef ARCH_GOLDENGATE	// shoh, 2014/06/17
+	if(dev->driver && strstr(dev->driver->name,"usb-storage"))
+	{
+		struct device *tdev=NULL;
+		cs752x_ehci_resume(tdev);
+	}
+#endif
+	if (is_usb_device(dev)) {
+		//struct usb_device	*udev = to_usb_device(dev);
+		int			status=0;
+
+		dev->power.last_busy = jiffies;
+		return status;
+	}
+
+	/* Runtime resume for a USB interface doesn't mean anything. */
+	return 0;
+}
+
+int dvr_runtime_idle(struct device *dev)
+{
+	int			status=0;
+	const struct dev_pm_ops *pm;
+
+	if (is_usb_device(dev)) {
+		struct usb_device	*udev = to_usb_device(dev);
+
+		if (autosuspend_check(udev) != 0)
+			return status;
+	}
+
+	pm = dev->driver ? dev->driver->pm : NULL;
+
+	if(pm && pm->runtime_idle)
+	{
+		status =  pm->runtime_idle;
+		return status;
+	}
+
+	pm_runtime_suspend(dev);
+	return 0;
+}
+
+static const struct dev_pm_ops drv_bus_pm_ops = {
+	.suspend = 		dvr_suspend,
+	.resume = 		dvr_resume,
+	.runtime_suspend =	dvr_runtime_suspend,
+	.runtime_resume =	dvr_runtime_resume,
+	.runtime_idle =		dvr_runtime_idle,
+};
 
 #endif /* CONFIG_USB_SUSPEND */
 

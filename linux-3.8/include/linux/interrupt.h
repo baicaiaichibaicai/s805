@@ -60,6 +60,7 @@
  *                resume time.
  */
 #define IRQF_DISABLED		0x00000020
+#define IRQF_SAMPLE_RANDOM	0x00000040
 #define IRQF_SHARED		0x00000080
 #define IRQF_PROBE_SHARED	0x00000100
 #define __IRQF_TIMER		0x00000200
@@ -439,6 +440,9 @@ extern char *softirq_to_name[NR_SOFTIRQS];
 struct softirq_action
 {
 	void	(*action)(struct softirq_action *);
+#ifdef CONFIG_SMB_TUNING
+	int   max_restart;
+#endif
 };
 
 asmlinkage void do_softirq(void);

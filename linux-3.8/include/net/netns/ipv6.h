@@ -44,6 +44,10 @@ struct netns_ipv6 {
 #endif
 	struct xt_table		*ip6table_nat;
 #endif
+#ifdef CONFIG_OMNI_NF
+	struct omni_xt_table	*omni_ip6table_nat;
+	struct omni_xt_table	*omni_ip6table_filter;
+#endif //CONFIG_OMNI_NF
 	struct rt6_info         *ip6_null_entry;
 	struct rt6_statistics   *rt6_stats;
 	struct timer_list       ip6_fib_timer;

@@ -27,6 +27,10 @@ struct netns_xfrm {
 	struct hlist_head	*state_bydst;
 	struct hlist_head	*state_bysrc;
 	struct hlist_head	*state_byspi;
+#ifdef CONFIG_FERRET_IPSEC
+	struct hlist_head	*state_bysend;
+	struct hlist_head	*state_byrcv;
+#endif
 	unsigned int		state_hmask;
 	unsigned int		state_num;
 	struct work_struct	state_hash_work;

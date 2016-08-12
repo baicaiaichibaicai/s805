@@ -15,6 +15,7 @@
  * binaries.
  */
 #include <linux/compiler.h>
+#include <linux/context_tracking.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
@@ -50,7 +51,7 @@ void ptrace_disable(struct task_struct *child)
 }
 
 /*
- * Read a general register set.  We always use the 64-bit format, even
+ * Read a general register set.	 We always use the 64-bit format, even
  * for 32-bit kernels and for 32-bit processes on a 64-bit kernel.
  * Registers are sign extended to fill the available space.
  */
@@ -129,13 +130,21 @@ int ptrace_getfpregs(struct task_struct *child, __u32 __user *data)
 			unsigned int vpflags = dvpe();
 			flags = read_c0_status();
 			__enable_fpu();
-			__asm__ __volatile__("cfc1\t%0,$0" : "=r" (tmp));
+			__asm__ __volatile__(
+				".set push\n"
+				"\t.set mips1\n"
+				"\tcfc1\t%0,$0\n"
+				"\t.set pop" : "=r" (tmp));
 			write_c0_status(flags);
 			evpe(vpflags);
 		} else {
 			flags = read_c0_status();
 			__enable_fpu();
-			__asm__ __volatile__("cfc1\t%0,$0" : "=r" (tmp));
+			__asm__ __volatile__(
+				".set push\n"
+				"\t.set mips1\n"
+				"\tcfc1\t%0,$0\n"
+				"\t.set pop" : "=r" (tmp));
 			write_c0_status(flags);
 		}
 	} else {
@@ -171,12 +180,14 @@ int ptrace_get_watch_regs(struct task_struct *child,
 			  struct pt_watch_regs __user *addr)
 {
 	enum pt_watch_style style;
-	int i;
+	unsigned int num_valid;
+	u16 watch_reg_masks[NUM_WATCH_REGS];
+	int i, rv;
 
-	if (!cpu_has_watch || current_cpu_data.watch_reg_use_cnt == 0)
+	if (!cpu_has_watch)
 		return -EIO;
 	if (!access_ok(VERIFY_WRITE, addr, sizeof(struct pt_watch_regs)))
-		return -EIO;
+		return -EFAULT;
 
 #ifdef CONFIG_32BIT
 	style = pt_watch_style_mips32;
@@ -186,41 +197,76 @@ int ptrace_get_watch_regs(struct task_struct *child,
 #define WATCH_STYLE mips64
 #endif
 
-	__put_user(style, &addr->style);
-	__put_user(current_cpu_data.watch_reg_use_cnt,
-		   &addr->WATCH_STYLE.num_valid);
-	for (i = 0; i < current_cpu_data.watch_reg_use_cnt; i++) {
-		__put_user(child->thread.watch.mips3264.watchlo[i],
-			   &addr->WATCH_STYLE.watchlo[i]);
-		__put_user(child->thread.watch.mips3264.watchhi[i] & 0xfff,
-			   &addr->WATCH_STYLE.watchhi[i]);
-		__put_user(current_cpu_data.watch_reg_masks[i],
-			   &addr->WATCH_STYLE.watch_masks[i]);
+	preempt_disable();
+	num_valid = current_cpu_data.watch_reg_use_cnt;
+	memcpy(watch_reg_masks, current_cpu_data.watch_reg_masks,
+	       sizeof(watch_reg_masks));
+	preempt_enable();
+
+	if (num_valid == 0)
+		return -EIO;
+
+	rv = __put_user(style, &addr->style);
+	if (rv)
+		goto out;
+	rv = __put_user(num_valid, &addr->WATCH_STYLE.num_valid);
+	if (rv)
+		goto out;
+	for (i = 0; i < num_valid; i++) {
+		rv = __put_user(child->thread.watch.mips3264.watchlo[i],
+				&addr->WATCH_STYLE.watchlo[i]);
+		if (rv)
+			goto out;
+		rv = __put_user(child->thread.watch.mips3264.watchhi[i] & 0xfff,
+				&addr->WATCH_STYLE.watchhi[i]);
+		if (rv)
+			goto out;
+		rv = __put_user(watch_reg_masks[i],
+				&addr->WATCH_STYLE.watch_masks[i]);
+		if (rv)
+			goto out;
 	}
 	for (; i < 8; i++) {
-		__put_user(0, &addr->WATCH_STYLE.watchlo[i]);
-		__put_user(0, &addr->WATCH_STYLE.watchhi[i]);
-		__put_user(0, &addr->WATCH_STYLE.watch_masks[i]);
+		rv = __put_user(0, &addr->WATCH_STYLE.watchlo[i]);
+		if (rv)
+			goto out;
+		rv = __put_user(0, &addr->WATCH_STYLE.watchhi[i]);
+		if (rv)
+			goto out;
+		rv = __put_user(0, &addr->WATCH_STYLE.watch_masks[i]);
+		if (rv)
+			goto out;
 	}
-
-	return 0;
+out:
+	return rv;
 }
 
 int ptrace_set_watch_regs(struct task_struct *child,
 			  struct pt_watch_regs __user *addr)
 {
-	int i;
+	int i, rv;
+	unsigned int num_valid;
 	int watch_active = 0;
 	unsigned long lt[NUM_WATCH_REGS];
 	u16 ht[NUM_WATCH_REGS];
 
-	if (!cpu_has_watch || current_cpu_data.watch_reg_use_cnt == 0)
+	if (!cpu_has_watch)
 		return -EIO;
 	if (!access_ok(VERIFY_READ, addr, sizeof(struct pt_watch_regs)))
+		return -EFAULT;
+
+	preempt_disable();
+	num_valid = current_cpu_data.watch_reg_use_cnt;
+	preempt_enable();
+
+	if (num_valid == 0)
 		return -EIO;
+
 	/* Check the values. */
-	for (i = 0; i < current_cpu_data.watch_reg_use_cnt; i++) {
-		__get_user(lt[i], &addr->WATCH_STYLE.watchlo[i]);
+	for (i = 0; i < num_valid; i++) {
+		rv = __get_user(lt[i], &addr->WATCH_STYLE.watchlo[i]);
+		if (rv)
+			return rv;
 #ifdef CONFIG_32BIT
 		if (lt[i] & __UA_LIMIT)
 			return -EINVAL;
@@ -233,12 +279,14 @@ int ptrace_set_watch_regs(struct task_struct *child,
 				return -EINVAL;
 		}
 #endif
-		__get_user(ht[i], &addr->WATCH_STYLE.watchhi[i]);
+		rv = __get_user(ht[i], &addr->WATCH_STYLE.watchhi[i]);
+		if (rv)
+			return rv;
 		if (ht[i] & ~0xff8)
 			return -EINVAL;
 	}
 	/* Install them. */
-	for (i = 0; i < current_cpu_data.watch_reg_use_cnt; i++) {
+	for (i = 0; i < num_valid; i++) {
 		if (lt[i] & 7)
 			watch_active = 1;
 		child->thread.watch.mips3264.watchlo[i] = lt[i];
@@ -326,7 +374,7 @@ long arch_ptrace(struct task_struct *child, long request,
 		case FPC_CSR:
 			tmp = child->thread.fpu.fcr31;
 			break;
-		case FPC_EIR: {	/* implementation / version register */
+		case FPC_EIR: { /* implementation / version register */
 			unsigned int flags;
 #ifdef CONFIG_MIPS_MT_SMTC
 			unsigned long irqflags;
@@ -348,13 +396,21 @@ long arch_ptrace(struct task_struct *child, long request,
 				unsigned int vpflags = dvpe();
 				flags = read_c0_status();
 				__enable_fpu();
-				__asm__ __volatile__("cfc1\t%0,$0": "=r" (tmp));
+				__asm__ __volatile__(
+					".set push\n"
+					"\t.set mips1\n"
+					"\tcfc1\t%0,$0\n"
+					"\t.set pop" : "=r" (tmp));
 				write_c0_status(flags);
 				evpe(vpflags);
 			} else {
 				flags = read_c0_status();
 				__enable_fpu();
-				__asm__ __volatile__("cfc1\t%0,$0": "=r" (tmp));
+				__asm__ __volatile__(
+					".set push\n"
+					"\t.set mips1\n"
+					"\tcfc1\t%0,$0\n"
+					"\t.set pop" : "=r" (tmp));
 				write_c0_status(flags);
 			}
 #ifdef CONFIG_MIPS_MT_SMTC
@@ -520,10 +576,10 @@ static inline int audit_arch(void)
 {
 	int arch = EM_MIPS;
 #ifdef CONFIG_64BIT
-	arch |=  __AUDIT_ARCH_64BIT;
+	arch |=	 __AUDIT_ARCH_64BIT;
 #endif
 #if defined(__LITTLE_ENDIAN)
-	arch |=  __AUDIT_ARCH_LE;
+	arch |=	 __AUDIT_ARCH_LE;
 #endif
 	return arch;
 }
@@ -534,6 +590,8 @@ static inline int audit_arch(void)
  */
 asmlinkage void syscall_trace_enter(struct pt_regs *regs)
 {
+	user_exit();
+
 	/* do the secure computing check first */
 	secure_computing_strict(regs->regs[2]);
 
@@ -546,7 +604,7 @@ asmlinkage void syscall_trace_enter(struct pt_regs *regs)
 	/* The 0x80 provides a way for the tracing parent to distinguish
 	   between a syscall stop and SIGTRAP delivery */
 	ptrace_notify(SIGTRAP | ((current->ptrace & PT_TRACESYSGOOD) ?
-	                         0x80 : 0));
+				 0x80 : 0));
 
 	/*
 	 * this isn't the same as continuing with a signal, but it will do
@@ -570,6 +628,13 @@ out:
  */
 asmlinkage void syscall_trace_leave(struct pt_regs *regs)
 {
+        /*
+	 * We may come here right after calling schedule_user()
+	 * or do_notify_resume(), in which case we can be in RCU
+	 * user mode.
+	 */
+	user_exit();
+
 	audit_syscall_exit(regs);
 
 	if (!(current->ptrace & PT_PTRACED))
@@ -581,7 +646,7 @@ asmlinkage void syscall_trace_leave(struct pt_regs *regs)
 	/* The 0x80 provides a way for the tracing parent to distinguish
 	   between a syscall stop and SIGTRAP delivery */
 	ptrace_notify(SIGTRAP | ((current->ptrace & PT_TRACESYSGOOD) ?
-	                         0x80 : 0));
+				 0x80 : 0));
 
 	/*
 	 * this isn't the same as continuing with a signal, but it will do
@@ -592,4 +657,6 @@ asmlinkage void syscall_trace_leave(struct pt_regs *regs)
 		send_sig(current->exit_code, current, 1);
 		current->exit_code = 0;
 	}
+
+	user_enter();
 }

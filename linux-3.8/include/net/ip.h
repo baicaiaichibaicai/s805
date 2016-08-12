@@ -56,6 +56,9 @@ struct ipcm_cookie {
 	int			oif;
 	struct ip_options_rcu	*opt;
 	__u8			tx_flags;
+#ifdef CONFIG_INET_IPSEC_SAREF
+	struct sec_path *sp;
+#endif
 };
 
 #define IPCB(skb) ((struct inet_skb_parm*)((skb)->cb))

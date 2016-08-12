@@ -284,6 +284,10 @@ static int unit_set(struct idr *p, void *ptr, int n);
 static void unit_put(struct idr *p, int n);
 static void *unit_find(struct idr *p, int n);
 
+#ifdef CONFIG_CS752X_ACCEL_KERNEL
+extern void cs_pppoe_del_hash_hook(char *pppoe_dev_name);
+#endif
+
 static struct class *ppp_class;
 
 /* per net-namespace data */
@@ -2755,6 +2759,11 @@ static void ppp_shutdown_interface(struct ppp *ppp)
 	if (!ppp->closing) {
 		ppp->closing = 1;
 		ppp_unlock(ppp);
+
+#ifdef CONFIG_CS752X_ACCEL_KERNEL
+		cs_pppoe_del_hash_hook(ppp->dev);
+#endif
+
 		unregister_netdev(ppp->dev);
 		unit_put(&pn->units_idr, ppp->file.index);
 	} else

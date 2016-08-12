@@ -74,6 +74,7 @@ static void meson_gic_unmask(struct irq_data *data)
     aml_set_reg32_bits(dist_base+GIC_DIST_PRI + (irq  / 4)* 4,0xff,(irq%4)*8,irq_level);
 
 }
+
 #ifdef CONFIG_OF
 static const struct of_device_id mesnon_dt_irq_match[] __initconst = {
 	{ .compatible = "arm,cortex-a9-gic", .data = gic_of_init },

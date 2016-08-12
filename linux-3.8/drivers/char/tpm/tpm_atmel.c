@@ -199,16 +199,19 @@ static int __init init_atmel(void)
 	    (atmel_request_region
 	     (tpm_atmel.base, region_size, "tpm_atmel0") == NULL) ? 0 : 1;
 
+	printk("%s[%d]\n", __func__, __LINE__);
 	pdev = platform_device_register_simple("tpm_atmel", -1, NULL, 0);
 	if (IS_ERR(pdev)) {
 		rc = PTR_ERR(pdev);
 		goto err_rel_reg;
 	}
 
+	printk("%s[%d]\n", __func__, __LINE__);
 	if (!(chip = tpm_register_hardware(&pdev->dev, &tpm_atmel))) {
 		rc = -ENODEV;
 		goto err_unreg_dev;
 	}
+	printk("%s[%d]\n", __func__, __LINE__);
 
 	chip->vendor.iobase = iobase;
 	chip->vendor.base = base;

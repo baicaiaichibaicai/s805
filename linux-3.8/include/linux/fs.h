@@ -244,6 +244,12 @@ struct iattr {
  */
 #include <linux/quota.h>
 
+/*
+ * Maximum number of layers of fs stack.  Needs to be limited to
+ * prevent kernel stack overflow
+ */
+#define FILESYSTEM_MAX_STACK_DEPTH 2
+
 /** 
  * enum positive_aop_returns - aop return codes with specific semantics
  *
@@ -770,6 +776,8 @@ struct file {
 	struct path		f_path;
 #define f_dentry	f_path.dentry
 #define f_vfsmnt	f_path.mnt
+	struct inode		*f_inode;	/* cached value */
+
 	const struct file_operations	*f_op;
 
 	/*
@@ -1234,6 +1242,7 @@ struct sb_writers {
 struct super_block {
 	struct list_head	s_list;		/* Keep this first */
 	dev_t			s_dev;		/* search index; _not_ kdev_t */
+	unsigned char		s_dirt;
 	unsigned char		s_blocksize_bits;
 	unsigned long		s_blocksize;
 	loff_t			s_maxbytes;	/* Max file size */
@@ -1246,6 +1255,7 @@ struct super_block {
 	unsigned long		s_magic;
 	struct dentry		*s_root;
 	struct rw_semaphore	s_umount;
+	struct mutex		s_lock;
 	int			s_count;
 	atomic_t		s_active;
 #ifdef CONFIG_SECURITY
@@ -1320,6 +1330,11 @@ struct super_block {
 
 	/* Being remounted read-only */
 	int s_readonly_remount;
+
+	/*
+	 * Indicates how deep in a filesystem stack this SB is
+	 */
+	int s_stack_depth;
 };
 
 /* superblock cache pruning functions */
@@ -1444,6 +1459,10 @@ static inline void sb_start_intwrite(struct super_block *sb)
 
 
 extern bool inode_owner_or_capable(const struct inode *inode);
+
+/* not quite ready to be deprecated, but... */
+extern void lock_super(struct super_block *);
+extern void unlock_super(struct super_block *);
 
 /*
  * VFS helper functions..
@@ -1573,7 +1592,10 @@ struct inode_operations {
 	int (*atomic_open)(struct inode *, struct dentry *,
 			   struct file *, unsigned open_flag,
 			   umode_t create_mode, int *opened);
+	int (*dentry_open)(struct dentry *, struct file *, const struct cred *);
 } ____cacheline_aligned;
+
+struct seq_file;
 
 ssize_t rw_copy_check_uvector(int type, const struct iovec __user * uvector,
 			      unsigned long nr_segs, unsigned long fast_segs,
@@ -1596,6 +1618,7 @@ struct super_operations {
 	int (*drop_inode) (struct inode *);
 	void (*evict_inode) (struct inode *);
 	void (*put_super) (struct super_block *);
+	void (*write_super) (struct super_block *);
 	int (*sync_fs)(struct super_block *sb, int wait);
 	int (*freeze_fs) (struct super_block *);
 	int (*unfreeze_fs) (struct super_block *);
@@ -2005,6 +2028,7 @@ extern struct file *file_open_name(struct filename *, int, umode_t);
 extern struct file *filp_open(const char *, int, umode_t);
 extern struct file *file_open_root(struct dentry *, struct vfsmount *,
 				   const char *, int);
+extern int vfs_open(const struct path *, struct file *, const struct cred *);
 extern struct file * dentry_open(const struct path *, int, const struct cred *);
 extern int filp_close(struct file *, fl_owner_t id);
 
@@ -2216,6 +2240,35 @@ static inline bool execute_ok(struct inode *inode)
 {
 	return (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode);
 }
+
+#if 0
+//odroid
+static inline struct inode *file_inode(struct file *f)
+{
+	return f->f_inode;
+}
+
+static inline void file_start_write(struct file *file)
+{
+	if (!S_ISREG(file_inode(file)->i_mode))
+		return;
+	__sb_start_write(file_inode(file)->i_sb, SB_FREEZE_WRITE, true);
+}
+
+static inline bool file_start_write_trylock(struct file *file)
+{
+	if (!S_ISREG(file_inode(file)->i_mode))
+		return true;
+	return __sb_start_write(file_inode(file)->i_sb, SB_FREEZE_WRITE, false);
+}
+
+static inline void file_end_write(struct file *file)
+{
+	if (!S_ISREG(file_inode(file)->i_mode))
+		return;
+	__sb_end_write(file_inode(file)->i_sb, SB_FREEZE_WRITE);
+}
+#endif
 
 /*
  * get_write_access() gets write permission for a file.

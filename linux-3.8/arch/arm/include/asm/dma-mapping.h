@@ -112,6 +112,9 @@ static inline void dma_free_noncoherent(struct device *dev, size_t size,
 
 extern int dma_supported(struct device *dev, u64 mask);
 
+extern void *dma_alloc_coherent(struct device *, size_t, dma_addr_t *, gfp_t);
+extern void dma_free_coherent(struct device *, size_t, void *, dma_addr_t);
+
 extern int arm_dma_set_mask(struct device *dev, u64 dma_mask);
 
 /**
@@ -128,7 +131,7 @@ extern int arm_dma_set_mask(struct device *dev, u64 dma_mask);
 extern void *arm_dma_alloc(struct device *dev, size_t size, dma_addr_t *handle,
 			   gfp_t gfp, struct dma_attrs *attrs);
 
-#define dma_alloc_coherent(d, s, h, f) dma_alloc_attrs(d, s, h, f, NULL)
+//#define dma_alloc_coherent(d, s, h, f) dma_alloc_attrs(d, s, h, f, NULL)
 
 static inline void *dma_alloc_attrs(struct device *dev, size_t size,
 				       dma_addr_t *dma_handle, gfp_t flag,
@@ -160,7 +163,7 @@ static inline void *dma_alloc_attrs(struct device *dev, size_t size,
 extern void arm_dma_free(struct device *dev, size_t size, void *cpu_addr,
 			 dma_addr_t handle, struct dma_attrs *attrs);
 
-#define dma_free_coherent(d, s, c, h) dma_free_attrs(d, s, c, h, NULL)
+//#define dma_free_coherent(d, s, c, h) dma_free_attrs(d, s, c, h, NULL)
 
 static inline void dma_free_attrs(struct device *dev, size_t size,
 				     void *cpu_addr, dma_addr_t dma_handle,
@@ -205,6 +208,9 @@ static inline void dma_free_writecombine(struct device *dev, size_t size,
 	dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
 	return dma_free_attrs(dev, size, cpu_addr, dma_handle, &attrs);
 }
+
+
+extern void __init init_consistent_dma_size(unsigned long size);
 
 /*
  * This can be called during early boot to increase the size of the atomic

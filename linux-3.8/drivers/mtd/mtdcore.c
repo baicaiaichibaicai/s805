@@ -39,6 +39,7 @@
 
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
+#include <linux/semaphore.h>
 
 #include "mtdcore.h"
 /*
@@ -1167,6 +1168,8 @@ static int __init mtd_bdi_init(struct backing_dev_info *bdi, const char *name)
 
 	return ret;
 }
+
+DEFINE_SEMAPHORE(cs752x_flash_sem);
 
 static int __init init_mtd(void)
 {

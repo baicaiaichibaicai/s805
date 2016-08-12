@@ -323,6 +323,9 @@ struct napi_struct {
 	struct sk_buff		*gro_list;
 	struct sk_buff		*skb;
 	struct list_head	dev_list;
+#ifdef CONFIG_SMB_TUNING
+	int			last_loop;
+#endif
 };
 
 enum {
@@ -1011,8 +1014,26 @@ struct net_device_ops {
 	int			(*ndo_bridge_getlink)(struct sk_buff *skb,
 						      u32 pid, u32 seq,
 						      struct net_device *dev);
+#ifdef CONFIG_FERRET
+	int			(*get_link_status)(struct net_device *dev);
+	int			(*get_link_speed)(struct net_device *dev);
+	int			(*get_link_duplex)(struct net_device *dev);
+	void        (*set_link_up_phy)(struct net_device *dev);
+	void        (*set_link_down_phy)(struct net_device *dev);
+	void        (*set_power_up_phy)(struct net_device *dev);
+	void        (*set_power_down_phy)(struct net_device *dev);
+	struct net_dev_hw_stats* (*get_hw_stats)(struct net_device *netdev);
+#endif
 };
 
+#ifdef CONFIG_BRIDGE_PKT_FWD_FILTER
+/* Support to check forwarding filter between LAN/WLAN and WAN.
+ * bits of vid_map[] mean VID of WAN port (eth0)
+ */
+struct packet_fwd_filter {
+	unsigned char vid_map[4096/8]; /* bitwise map: 1: forward, 0: drop */
+};
+#endif
 /*
  *	The DEVICE structure.
  *	Actually, this whole structure is a big mistake.  It mixes I/O
@@ -1022,6 +1043,31 @@ struct net_device_ops {
  *	FIXME: cleanup struct net_device such that network protocol info
  *	moves out.
  */
+#ifdef CONFIG_FERRET
+extern int fast_nic_flag;
+extern int get_fast_nic_flag(void);
+extern void set_fast_nic_flag(int arg);
+
+struct mirror_list {
+    struct list_head list;
+    unsigned int if_idx;
+};
+
+struct net_dev_mirror {
+    struct mirror_list mirror_entries;
+};
+
+struct net_dev_hw_stats {
+	u64 prc64;
+	u64 prc127;
+	u64 prc255;
+	u64 prc511;
+	u64 prc1023;
+	u64 prc1522;
+	u64 rx_packets;
+	u64 rx_bytes;
+};
+#endif
 
 struct net_device {
 
@@ -1053,11 +1099,11 @@ struct net_device {
 	 */
 
 	unsigned long		state;
-
+	
 	struct list_head	dev_list;
 	struct list_head	napi_list;
 	struct list_head	unreg_list;
-
+	struct net_device   *next;
 	/* currently active device features */
 	netdev_features_t	features;
 	/* user-changeable features */
@@ -1076,7 +1122,8 @@ struct net_device {
 	/* Interface index. Unique device identifier	*/
 	int			ifindex;
 	int			iflink;
-
+	
+	struct net_device_stats* (*get_stats)(struct net_device *dev);
 	struct net_device_stats	stats;
 	atomic_long_t		rx_dropped; /* dropped packets by core network
 					     * Do not use this in drivers.
@@ -1214,6 +1261,9 @@ struct net_device {
 
 	/* root qdisc from userspace point of view */
 	struct Qdisc		*qdisc;
+#ifdef CONFIG_FERRET
+	unsigned int		no_qdisc;		/* if set, default pfifo_fast only */
+#endif
 
 	unsigned long		tx_queue_len;	/* Max frames per queue allowed */
 	spinlock_t		tx_global_lock;
@@ -1319,6 +1369,44 @@ struct net_device {
 	int group;
 
 	struct pm_qos_request	pm_qos_req;
+#ifdef CONFIG_FERRET
+	unsigned long			last_rcv_jiff;  /* last receive jiffies */
+	unsigned long			last_log_jiff;  /* last receive jiffies */
+
+	int						(*get_link_status)(struct net_device *dev);
+	int						(*get_link_speed)(struct net_device *dev);
+	int						(*get_link_duplex)(struct net_device *dev);
+	void                    (*set_link_up_phy)(struct net_device *dev);
+	void                    (*set_link_down_phy)(struct net_device *dev);
+	void                    (*set_power_up_phy)(struct net_device *dev);
+	void                    (*set_power_down_phy)(struct net_device *dev);
+	void                    (*run_watchdog_task)(struct net_device *dev);
+	int						iface;
+	unsigned char			op_mode; // IF_MODE_NOT_SET, IF_MODE_INTERNAL, IF_MODE_EXTERNAL, IF_MODE_DMZ, IF_MODE_PAN...
+	unsigned char           link_down_phy;
+	char					rvd[2];
+    struct net_dev_mirror rx_mirror;
+    struct net_dev_mirror tx_mirror;
+#endif
+
+#ifdef CONFIG_BRIDGE_PKT_FWD_FILTER
+	/* 
+	 * Forwarding filter to drop packets.
+	 * bitwise map for VID 0 ~ 4095
+	 */
+	struct packet_fwd_filter *pkt_fwd_filter;
+
+	/*
+	 * Forwarding group of this deivce.
+	 * Forwarding between the same group is not allowed.
+	 */
+	unsigned char fwd_grp;
+#define NETDEV_GRP_IGNORE	0 /* ignore the (from, to) relation */
+#define NETDEV_GRP_LAN		1 /* LAN group */
+#define NETDEV_GRP_WAN		2 /* WAN group */
+#define NETDEV_GRP_WLAN	4 /* WLAN group */
+#endif
+
 };
 #define to_net_dev(d) container_of(d, struct net_device, dev)
 
@@ -1629,6 +1717,7 @@ static inline struct net_device *first_net_device_rcu(struct net *net)
 	return lh == &net->dev_base_head ? NULL : net_device_entry(lh);
 }
 
+extern struct net_device 	*dev_base;             /*all devices*/
 extern int 			netdev_boot_setup_check(struct net_device *dev);
 extern unsigned long		netdev_boot_base(const char *prefix, int unit);
 extern struct net_device *dev_getbyhwaddr_rcu(struct net *net, unsigned short type,
@@ -1675,6 +1764,11 @@ extern int		dev_restart(struct net_device *dev);
 #ifdef CONFIG_NETPOLL_TRAP
 extern int		netpoll_trap(void);
 #endif
+
+#ifdef CONFIG_FERRET
+extern void linkpack_check(int port_num, int link);
+#endif
+
 extern int	       skb_gro_receive(struct sk_buff **head,
 				       struct sk_buff *skb);
 
@@ -1939,6 +2033,13 @@ static inline void netdev_tx_sent_queue(struct netdev_queue *dev_queue,
 					unsigned int bytes)
 {
 #ifdef CONFIG_BQL
+#ifdef CONFIG_FERRET
+	if (fast_nic_flag) {
+		clear_bit(__QUEUE_STATE_STACK_XOFF, &dev_queue->state);
+		return ;
+	}
+#endif
+
 	dql_queued(&dev_queue->dql, bytes);
 
 	if (likely(dql_avail(&dev_queue->dql) >= 0))
@@ -1968,6 +2069,14 @@ static inline void netdev_tx_completed_queue(struct netdev_queue *dev_queue,
 					     unsigned int pkts, unsigned int bytes)
 {
 #ifdef CONFIG_BQL
+#ifdef CONFIG_FERRET
+	if (fast_nic_flag) {
+		if (test_and_clear_bit(__QUEUE_STATE_STACK_XOFF, &dev_queue->state))
+			netif_schedule_queue(dev_queue);
+		return ;
+	}
+#endif
+
 	if (unlikely(!bytes))
 		return;
 

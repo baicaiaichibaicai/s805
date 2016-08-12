@@ -64,7 +64,29 @@ int __ablk_encrypt(struct ablkcipher_request *req)
 		&desc, req->dst, req->src, req->nbytes);
 }
 EXPORT_SYMBOL_GPL(__ablk_encrypt);
+#ifdef CONFIG_FERRET
+int ablk_encrypt(struct ablkcipher_request *req)
+{
+	return __ablk_encrypt(req);
+}
+EXPORT_SYMBOL_GPL(ablk_encrypt);
 
+int ablk_decrypt(struct ablkcipher_request *req)
+{
+	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
+	struct async_helper_ctx *ctx = crypto_ablkcipher_ctx(tfm);
+	struct blkcipher_desc desc;
+
+	desc.tfm = cryptd_ablkcipher_child(ctx->cryptd_tfm);
+	desc.info = req->info;
+	desc.flags = 0;
+
+	return crypto_blkcipher_crt(desc.tfm)->decrypt(
+			&desc, req->dst, req->src, req->nbytes);
+}
+EXPORT_SYMBOL_GPL(ablk_decrypt);
+
+#else
 int ablk_encrypt(struct ablkcipher_request *req)
 {
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
@@ -109,6 +131,8 @@ int ablk_decrypt(struct ablkcipher_request *req)
 	}
 }
 EXPORT_SYMBOL_GPL(ablk_decrypt);
+
+#endif
 
 void ablk_exit(struct crypto_tfm *tfm)
 {

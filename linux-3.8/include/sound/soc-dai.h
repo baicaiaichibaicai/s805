@@ -252,6 +252,9 @@ struct snd_soc_dai {
 	void *playback_dma_data;
 	void *capture_dma_data;
 
+	/* DAI private data */
+	void *private_data;
+
 	/* Symmetry data - only valid if symmetry is being enforced */
 	unsigned int rate;
 

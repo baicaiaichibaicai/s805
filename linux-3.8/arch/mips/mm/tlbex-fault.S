@@ -14,6 +14,12 @@
 	NESTED(tlb_do_page_fault_\write, PT_SIZE, sp)
 	SAVE_ALL
 	MFC0	a2, CP0_BADVADDR
+#ifdef CONFIG_KVM_MIPS_VZ
+	mfc0	v0, CP0_BADINSTR
+	mfc0	v1, CP0_BADINSTRP
+	sw	v0, PT_BADINSTR(sp)
+	sw	v1, PT_BADINSTRP(sp)
+#endif
 	KMODE
 	move	a0, sp
 	REG_S	a2, PT_BVADDR(sp)

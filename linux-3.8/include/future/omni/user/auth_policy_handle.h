@@ -1,0 +1,6 @@
+#ifndef _AUTH_POLICY_HANDLE_H_
+#define _AUTH_POLICY_HANDLE_H_
+
+#define AUTH_POLICY_SET_ID  5676
+
+#endif

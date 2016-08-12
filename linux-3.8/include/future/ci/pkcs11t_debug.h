@@ -1,0 +1,30 @@
+#ifndef _PKCS11T_DEBUG_H_
+#define	_PKCS11T_DEBUG_H_
+
+
+#define MAX_BLOCK_DATA_LEN	(2048 - 128)
+
+typedef enum {
+
+	CKD_CMD_NOT_DEFINED		= 0xff,
+	CKD_CMD_SHOW_SRAM		= 0x01,
+	CKD_CMD_GET_SRAM		= 0x02,
+	CKD_CMD_SET_DBG_STRING	= 0x03,
+	CKD_CMD_GET_DBG_STRING	= 0x04,
+	CKD_CMD_SHOW_SESSION	= 0x05,
+	CKD_CMD_GET_LOG			= 0x06,
+
+} CKD_CMD_TYPE;
+
+typedef struct {
+#define DBG_CMD_MAGIC		0x6762645f		// _dbg
+	CK_ULONG	magic;
+	CK_ULONG	cmd;
+	CK_ULONG	ulMsgLen;
+	CK_ULONG	ulReserved;
+
+	CK_BYTE		msg[MAX_BLOCK_DATA_LEN - sizeof(CK_ULONG)*4];
+} CK_DEBUG_CMD, CK_PTR CK_DEBUG_CMD_PTR, CK_PTR PCK_DEBUG_CMD;
+
+
+#endif /* _PKCS11T_DEBUG_H_ */

@@ -76,6 +76,8 @@ cmd_image = $(obj)/tools/build $(obj)/setup.bin $(obj)/vmlinux.bin $(obj)/zoffse
 $(obj)/bzImage: $(obj)/setup.bin $(obj)/vmlinux.bin $(obj)/tools/build FORCE
 	$(call if_changed,image)
 	@echo 'Kernel: $@ is ready' ' (#'`cat .version`')'
+	mkimage_xtm -A x86_64 -O linux -T kernel -n 'kernel' \
+		-C gzip -a 0 -e 0 -i 0 -p 'ZEN' -r vmlinux -d arch/x86/boot/bzImage x64.bin
 
 OBJCOPYFLAGS_vmlinux.bin := -O binary -R .note -R .comment -S
 $(obj)/vmlinux.bin: $(obj)/compressed/vmlinux FORCE

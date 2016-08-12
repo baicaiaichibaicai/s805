@@ -466,6 +466,9 @@ struct usb_gadget_ops {
 	int	(*pullup) (struct usb_gadget *, int is_on);
 	int	(*ioctl)(struct usb_gadget *,
 				unsigned code, unsigned long param);
+#ifdef CONFIG_USB_GADGET_SNPS_DWC_OTG
+	int	(*lpm_support) (struct usb_gadget *);
+#endif
 	void	(*get_config_params)(struct usb_dcd_config_params *);
 	int	(*udc_start)(struct usb_gadget *,
 			struct usb_gadget_driver *);
@@ -531,6 +534,10 @@ struct usb_gadget {
 	struct list_head		ep_list;	/* of usb_ep */
 	enum usb_device_speed		speed;
 	enum usb_device_speed		max_speed;
+	
+	//odroid
+	enum usb_device_state		state;
+
 	unsigned			sg_supported:1;
 	unsigned			is_otg:1;
 	unsigned			is_a_peripheral:1;
@@ -541,6 +548,9 @@ struct usb_gadget {
 	struct device			dev;
 	unsigned			out_epnum;
 	unsigned			in_epnum;
+
+	//odroid
+	void *   priv_data;
 };
 
 static inline void set_gadget_data(struct usb_gadget *gadget, void *data)
@@ -878,8 +888,16 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver);
  */
 int usb_gadget_unregister_driver(struct usb_gadget_driver *driver);
 
+//odroid
+extern int usb_add_gadget_udc_release(struct device *parent,
+		struct usb_gadget *gadget, void (*release)(struct device *dev));
+
 extern int usb_add_gadget_udc(struct device *parent, struct usb_gadget *gadget);
 extern void usb_del_gadget_udc(struct usb_gadget *gadget);
+
+//odroid
+extern int udc_attach_driver(const char *name,
+		struct usb_gadget_driver *driver);
 
 /*-------------------------------------------------------------------------*/
 
@@ -909,6 +927,14 @@ struct usb_string {
 struct usb_gadget_strings {
 	u16			language;	/* 0x0409 for en-us */
 	struct usb_string	*strings;
+//odroid
+};
+
+struct usb_gadget_string_container {
+	struct list_head        list;
+	u8                      *stash[0];
+
+
 };
 
 /* put descriptor for string with that id into buf (buflen >= 256) */
@@ -957,6 +983,15 @@ extern void usb_gadget_unmap_request(struct usb_gadget *gadget,
 		struct usb_request *req, int is_in);
 
 /*-------------------------------------------------------------------------*/
+//odroid
+/* utility to set gadget state properly */
+
+extern void usb_gadget_set_state(struct usb_gadget *gadget,
+		enum usb_device_state state);
+
+/*-------------------------------------------------------------------------*/
+
+
 
 /* utility wrapping a simple endpoint selection policy */
 

@@ -57,6 +57,9 @@ struct realtek_pci_sdmmc {
 	bool			eject;
 	bool			initial_mode;
 	bool			ddr_mode;
+	int			power_state;
+#define SDMMC_POWER_ON		1
+#define SDMMC_POWER_OFF		0
 };
 
 static inline struct device *sdmmc_dev(struct realtek_pci_sdmmc *host)
@@ -244,6 +247,9 @@ static void sd_send_cmd_get_rsp(struct realtek_pci_sdmmc *host,
 	case MMC_RSP_R1:
 		rsp_type = SD_RSP_TYPE_R1;
 		break;
+	case MMC_RSP_R1 & ~MMC_RSP_CRC:
+		rsp_type = SD_RSP_TYPE_R1 | SD_NO_CHECK_CRC7;
+		break;
 	case MMC_RSP_R1B:
 		rsp_type = SD_RSP_TYPE_R1b;
 		break;
@@ -335,6 +341,13 @@ static void sd_send_cmd_get_rsp(struct realtek_pci_sdmmc *host,
 	}
 
 	if (rsp_type == SD_RSP_TYPE_R2) {
+		/*
+		 * The controller offloads the last byte {CRC-7, end bit 1'b1}
+		 * of response type R2. Assign dummy CRC, 0, and end bit to the
+		 * byte(ptr[16], goes into the LSB of resp[3] later).
+		 */
+		ptr[16] = 1;
+
 		for (i = 0; i < 4; i++) {
 			cmd->resp[i] = get_unaligned_be32(ptr + 1 + i * 4);
 			dev_dbg(sdmmc_dev(host), "cmd->resp[%d] = 0x%08x\n",
@@ -678,9 +691,16 @@ static void sdmmc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	struct mmc_command *cmd = mrq->cmd;
 	struct mmc_data *data = mrq->data;
 	unsigned int data_size = 0;
+	int err;
 
 	if (host->eject) {
 		cmd->error = -ENOMEDIUM;
+		goto finish;
+	}
+
+	err = rtsx_pci_card_exclusive_check(host->pcr, RTSX_SD_CARD);
+	if (err) {
+		cmd->error = err;
 		goto finish;
 	}
 
@@ -758,6 +778,9 @@ static int sd_power_on(struct realtek_pci_sdmmc *host)
 	struct rtsx_pcr *pcr = host->pcr;
 	int err;
 
+	if (host->power_state == SDMMC_POWER_ON)
+		return 0;
+
 	rtsx_pci_init_cmd(pcr);
 	rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, CARD_SELECT, 0x07, SD_MOD_SEL);
 	rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, CARD_SHARE_MODE,
@@ -780,6 +803,7 @@ static int sd_power_on(struct realtek_pci_sdmmc *host)
 	if (err < 0)
 		return err;
 
+	host->power_state = SDMMC_POWER_ON;
 	return 0;
 }
 
@@ -787,6 +811,8 @@ static int sd_power_off(struct realtek_pci_sdmmc *host)
 {
 	struct rtsx_pcr *pcr = host->pcr;
 	int err;
+
+	host->power_state = SDMMC_POWER_OFF;
 
 	rtsx_pci_init_cmd(pcr);
 
@@ -899,6 +925,9 @@ static void sdmmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	struct rtsx_pcr *pcr = host->pcr;
 
 	if (host->eject)
+		return;
+
+	if (rtsx_pci_card_exclusive_check(host->pcr, RTSX_SD_CARD))
 		return;
 
 	mutex_lock(&pcr->pcr_mutex);
@@ -1073,6 +1102,10 @@ static int sdmmc_switch_voltage(struct mmc_host *mmc, struct mmc_ios *ios)
 	if (host->eject)
 		return -ENOMEDIUM;
 
+	err = rtsx_pci_card_exclusive_check(host->pcr, RTSX_SD_CARD);
+	if (err)
+		return err;
+
 	mutex_lock(&pcr->pcr_mutex);
 
 	rtsx_pci_start_run(pcr);
@@ -1083,11 +1116,6 @@ static int sdmmc_switch_voltage(struct mmc_host *mmc, struct mmc_ios *ios)
 		voltage = OUTPUT_1V8;
 
 	if (voltage == OUTPUT_1V8) {
-		err = rtsx_pci_write_register(pcr,
-				SD30_DRIVE_SEL, 0x07, DRIVER_TYPE_B);
-		if (err < 0)
-			goto out;
-
 		err = sd_wait_voltage_stable_1(host);
 		if (err < 0)
 			goto out;
@@ -1121,6 +1149,10 @@ static int sdmmc_execute_tuning(struct mmc_host *mmc, u32 opcode)
 
 	if (host->eject)
 		return -ENOMEDIUM;
+
+	err = rtsx_pci_card_exclusive_check(host->pcr, RTSX_SD_CARD);
+	if (err)
+		return err;
 
 	mutex_lock(&pcr->pcr_mutex);
 
@@ -1247,6 +1279,7 @@ static int rtsx_pci_sdmmc_drv_probe(struct platform_device *pdev)
 	host->pcr = pcr;
 	host->mmc = mmc;
 	host->pdev = pdev;
+	host->power_state = SDMMC_POWER_OFF;
 	platform_set_drvdata(pdev, host);
 	pcr->slots[RTSX_SD_CARD].p_dev = pdev;
 	pcr->slots[RTSX_SD_CARD].card_event = rtsx_pci_sdmmc_card_event;

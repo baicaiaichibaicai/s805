@@ -68,8 +68,9 @@
 #define DRIVER_AUTHOR "David Brownell"
 #define DRIVER_DESC "USB 2.0 'Enhanced' Host Controller (EHCI) Driver"
 
+#ifndef CONFIG_CORTINA_G2_USB_HOST
 static const char	hcd_name [] = "ehci_hcd";
-
+#endif
 
 #undef VERBOSE_DEBUG
 #undef EHCI_URB_TRACE
@@ -365,6 +366,24 @@ static void ehci_shutdown(struct usb_hcd *hcd)
 	ehci_silence_controller(ehci);
 
 	hrtimer_cancel(&ehci->hrtimer);
+}
+
+static void ehci_port_power(struct ehci_hcd *ehci, int is_on)
+{
+	unsigned port;
+
+	if (!HCS_PPC(ehci->hcs_params))
+		return;
+
+	ehci_dbg(ehci, "...power%s ports...\n", is_on ? "up" : "down");
+	for (port = HCS_N_PORTS(ehci->hcs_params); port > 0; )
+		(void) ehci_hub_control(ehci_to_hcd(ehci),
+				is_on ? SetPortFeature : ClearPortFeature,
+				USB_PORT_FEAT_POWER,
+				port--, NULL, 0);
+
+	ehci_readl(ehci, &ehci->regs->command);
+	msleep(20);
 }
 
 /*-------------------------------------------------------------------------*/
@@ -1171,76 +1190,20 @@ EXPORT_SYMBOL_GPL(ehci_resume);
 
 #endif
 
-/*-------------------------------------------------------------------------*/
-
-/*
- * Generic structure: This gets copied for platform drivers so that
- * individual entries can be overridden as needed.
- */
-
-static const struct hc_driver ehci_hc_driver = {
-	.description =		hcd_name,
-	.product_desc =		"EHCI Host Controller",
-	.hcd_priv_size =	sizeof(struct ehci_hcd),
-
-	/*
-	 * generic hardware linkage
-	 */
-	.irq =			ehci_irq,
-	.flags =		HCD_MEMORY | HCD_USB2,
-
-	/*
-	 * basic lifecycle operations
-	 */
-	.reset =		ehci_setup,
-	.start =		ehci_run,
-	.stop =			ehci_stop,
-	.shutdown =		ehci_shutdown,
-
-	/*
-	 * managing i/o requests and associated device resources
-	 */
-	.urb_enqueue =		ehci_urb_enqueue,
-	.urb_dequeue =		ehci_urb_dequeue,
-	.endpoint_disable =	ehci_endpoint_disable,
-	.endpoint_reset =	ehci_endpoint_reset,
-	.clear_tt_buffer_complete =	ehci_clear_tt_buffer_complete,
-
-	/*
-	 * scheduling support
-	 */
-	.get_frame_number =	ehci_get_frame,
-
-	/*
-	 * root hub support
-	 */
-	.hub_status_data =	ehci_hub_status_data,
-	.hub_control =		ehci_hub_control,
-	.bus_suspend =		ehci_bus_suspend,
-	.bus_resume =		ehci_bus_resume,
-	.relinquish_port =	ehci_relinquish_port,
-	.port_handed_over =	ehci_port_handed_over,
-};
-
-void ehci_init_driver(struct hc_driver *drv,
-		const struct ehci_driver_overrides *over)
-{
-	/* Copy the generic table to drv and then apply the overrides */
-	*drv = ehci_hc_driver;
-
-	if (over) {
-		drv->hcd_priv_size += over->extra_priv_size;
-		if (over->reset)
-			drv->reset = over->reset;
-	}
-}
-EXPORT_SYMBOL_GPL(ehci_init_driver);
-
-/*-------------------------------------------------------------------------*/
 
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_AUTHOR (DRIVER_AUTHOR);
 MODULE_LICENSE ("GPL");
+
+/*Stone Add*/
+#ifdef CONFIG_ARM
+#ifndef CONFIG_CORTINA_G2_USB_HOST
+#ifdef CONFIG_PCI
+#include "ehci-pci.c"
+#define	PCI_DRIVER		ehci_pci_driver
+#endif
+#endif
+#endif
 
 #ifdef CONFIG_USB_EHCI_FSL
 #include "ehci-fsl.c"
@@ -1275,6 +1238,11 @@ MODULE_LICENSE ("GPL");
 #ifdef CONFIG_PLAT_ORION
 #include "ehci-orion.c"
 #define	PLATFORM_DRIVER		ehci_orion_driver
+#endif
+
+#ifdef CONFIG_CORTINA_G2_USB_HOST
+#include "ehci-cs752x.c"
+#define	PLATFORM_DRIVER		cs752x_ehci_driver
 #endif
 
 #ifdef CONFIG_USB_W90X900_EHCI
@@ -1342,6 +1310,72 @@ MODULE_LICENSE ("GPL");
 #define	PLATFORM_DRIVER		ehci_hcd_sead3_driver
 #endif
 
+/*-------------------------------------------------------------------------*/
+
+/*
+ * Generic structure: This gets copied for platform drivers so that
+ * individual entries can be overridden as needed.
+ */
+
+static const struct hc_driver ehci_hc_driver = {
+	.description =		hcd_name,
+	.product_desc =		"EHCI Host Controller",
+	.hcd_priv_size =	sizeof(struct ehci_hcd),
+
+	/*
+	 * generic hardware linkage
+	 */
+	.irq =			ehci_irq,
+	.flags =		HCD_MEMORY | HCD_USB2,
+
+	/*
+	 * basic lifecycle operations
+	 */
+	.reset =		ehci_setup,
+	.start =		ehci_run,
+	.stop =			ehci_stop,
+	.shutdown =		ehci_shutdown,
+
+	/*
+	 * managing i/o requests and associated device resources
+	 */
+	.urb_enqueue =		ehci_urb_enqueue,
+	.urb_dequeue =		ehci_urb_dequeue,
+	.endpoint_disable =	ehci_endpoint_disable,
+	.endpoint_reset =	ehci_endpoint_reset,
+	.clear_tt_buffer_complete =	ehci_clear_tt_buffer_complete,
+
+	/*
+	 * scheduling support
+	 */
+	.get_frame_number =	ehci_get_frame,
+
+	/*
+	 * root hub support
+	 */
+	.hub_status_data =	ehci_hub_status_data,
+	.hub_control =		ehci_hub_control,
+	.bus_suspend =		ehci_bus_suspend,
+	.bus_resume =		ehci_bus_resume,
+	.relinquish_port =	ehci_relinquish_port,
+	.port_handed_over =	ehci_port_handed_over,
+};
+
+void ehci_init_driver(struct hc_driver *drv,
+		const struct ehci_driver_overrides *over)
+{
+	/* Copy the generic table to drv and then apply the overrides */
+	*drv = ehci_hc_driver;
+
+	if (over) {
+		drv->hcd_priv_size += over->extra_priv_size;
+		if (over->reset)
+			drv->reset = over->reset;
+	}
+}
+EXPORT_SYMBOL_GPL(ehci_init_driver);
+
+/*-------------------------------------------------------------------------*/
 #if !IS_ENABLED(CONFIG_USB_EHCI_PCI) && \
 	!IS_ENABLED(CONFIG_USB_EHCI_HCD_PLATFORM) && \
 	!IS_ENABLED(CONFIG_USB_CHIPIDEA_HOST) && \

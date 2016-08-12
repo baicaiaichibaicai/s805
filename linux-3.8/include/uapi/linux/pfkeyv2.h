@@ -297,7 +297,13 @@ struct sadb_x_kmaddress {
 #define SADB_X_AALG_RIPEMD160HMAC	8
 #define SADB_X_AALG_AES_XCBC_MAC	9
 #define SADB_X_AALG_NULL		251	/* kame */
+
+#ifdef CONFIG_CRYPTO_HAS160
+#define SADB_X_AALG_HAS160HMAC 255
+#define SADB_AALG_MAX			255
+#else
 #define SADB_AALG_MAX			251
+#endif
 
 /* Encryption algorithms */
 #define SADB_EALG_NONE			0
@@ -316,6 +322,19 @@ struct sadb_x_kmaddress {
 #define SADB_X_EALG_AES_GCM_ICV16	20
 #define SADB_X_EALG_CAMELLIACBC		22
 #define SADB_X_EALG_NULL_AES_GMAC	23
+
+#ifdef CONFIG_FERRET_IPSEC
+#define SADB_X_EALG_ARIACBC			234
+#define SADB_X_EALG_SEEDCBC			251
+#endif
+
+#ifdef CONFIG_CRYPTO_RAKA
+#define SADB_X_EALG_CELOCBC         65
+#define SADB_X_EALG_DICECBC         66
+#define SADB_X_AALG_NSRNASH_HMAC    73
+#define SADB_X_AALG_NSRSHA2_HMAC    74
+#endif
+
 #define SADB_EALG_MAX                   253 /* last EALG */
 /* private allocations should use 249-255 (RFC2407) */
 #define SADB_X_EALG_SERPENTCBC  252     /* draft-ietf-ipsec-ciph-aes-cbc-00 */

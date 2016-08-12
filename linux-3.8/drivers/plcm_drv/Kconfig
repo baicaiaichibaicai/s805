@@ -1,0 +1,15 @@
+#
+# Character device configuration
+#
+
+menu "LCD devices"
+
+config PLCM_DRV
+	tristate "/dev/plcm_drv plcm lanner drive"
+	default y
+	help
+	  Say Y here if you want to support the /dev/plcm_drv lanner lcd.
+	  When in doubt, say "N".
+
+endmenu
+

@@ -23,6 +23,31 @@ config MTD_TESTS
 	  WARNING: some of the tests will ERASE entire MTD device which they
 	  test. Do not use these tests unless you really know what you do.
 
+config MTD_PARTITIONS
+	bool "MTD partitioning support"
+	help
+	  If you have a device which needs to divide its flash chip(s) up
+	  into multiple 'partitions', each of which appears to the user as
+	  a separate MTD device, you require this option to be enabled. If
+	  unsure, say 'Y'.
+
+	  Note, however, that you don't need this option for the DiskOnChip
+	  devices. Partitioning on NFTL 'devices' is a different - that's the
+	  'normal' form of partitioning used on a block device.
+
+
+config MTD_ROOTFS_ROOT_DEV
+	bool "Automatically set 'rootfs' partition to be root filesystem"
+	default y
+
+config MTD_ROOTFS_BADBLOCK
+	bool "Bad blocks handleing for root filesytem"
+	default y
+	help
+	  If it is used some filesystem( like squashfs) in nand filesytem, 
+	  it crases if bad blockes existed. This provides some simple mechansim
+	  to fixed it. 
+
 config MTD_REDBOOT_PARTS
 	tristate "RedBoot partition table parsing"
 	---help---
@@ -310,6 +335,19 @@ config MTD_OOPS
 	  This enables panic and oops messages to be logged to a circular
 	  buffer in a flash partition where it can be read back at some
 	  later point.
+
+	  To use, add console=ttyMTDx to the kernel command line,
+	  where x is the MTD device number to use.
+
+config MTD_CS752X_MULTIFLASH
+	bool "Cortina multi-flash flag"
+	help
+	  This enables panic and oops messages to be logged to a circular
+	  buffer in a flash partition where it can be read back at some
+	  later point.
+
+	  To use, add console=ttyMTDx to the kernel command line,
+	  where x is the MTD device number to use.
 
 config MTD_SWAP
 	tristate "Swap on MTD device support"

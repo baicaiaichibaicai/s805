@@ -115,6 +115,12 @@ struct ip_mc_socklist;
 struct ipv6_pinfo;
 struct rtable;
 
+enum omni_inspect_status {
+	O_INSPECT_NONE = 0,
+	O_INSPECT,
+	O_NOT_INSPECT,
+};
+
 /** struct inet_sock - representation of INET sockets
  *
  * @sk - ancestor class
@@ -167,6 +173,7 @@ struct inet_sock {
 				hdrincl:1,
 				mc_loop:1,
 				transparent:1,
+				inspect:2,
 				mc_all:1,
 				nodefrag:1;
 	__u8			rcv_tos;

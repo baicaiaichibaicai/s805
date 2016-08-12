@@ -679,6 +679,68 @@ struct device_node *of_find_node_by_phandle(phandle handle)
 }
 EXPORT_SYMBOL(of_find_node_by_phandle);
 
+
+//Modfied odroid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined (CONFIG_PLAT_MESON)
+/**
+ * of_find_property_value_of_size
+ *
+ * @np:     device node from which the property value is to be read.
+ * @propname:   name of the property to be searched.
+ * @len:    requested length of property value
+ *
+ * Search for a property in a device node and valid the requested size.
+ * Returns the property value on success, -EINVAL if the property does not
+ *  exist, -ENODATA if property does not have a value, and -EOVERFLOW if the
+ * property data isn't large enough.
+ *
+ */
+static void *of_find_property_value_of_size(const struct device_node *np,
+		const char *propname, u32 len)
+{
+	struct property *prop = of_find_property(np, propname, NULL);
+
+	if (!prop)
+		return ERR_PTR(-EINVAL);
+	if (!prop->value)
+		return ERR_PTR(-ENODATA);
+	if (len > prop->length)
+		return ERR_PTR(-EOVERFLOW);
+
+	return prop->value;
+}
+
+/**
+ * of_property_read_u32_index - Find and read a u32 from a multi-value property.
+ *
+ * @np:     device node from which the property value is to be read.
+ * @propname:   name of the property to be searched.
+ * @index:  index of the u32 in the list of values
+ * @out_value:  pointer to return value, modified only if no error.
+ *
+ * Search for a property in a device node and read nth 32-bit value from
+ * it. Returns 0 on success, -EINVAL if the property does not exist,
+ * -ENODATA if property does not have a value, and -EOVERFLOW if the
+ * property data isn't large enough.
+ *
+ * The out_value is modified only if a valid u32 value can be decoded.
+ */
+int of_property_read_u32_index(const struct device_node *np,
+		const char *propname,
+		u32 index, u32 *out_value)
+{
+	const u32 *val = of_find_property_value_of_size(np, propname,
+			((index + 1) * sizeof(*out_value)));
+
+	if (IS_ERR(val))
+		return PTR_ERR(val);
+
+	*out_value = be32_to_cpup(((__be32 *)val) + index);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(of_property_read_u32_index);
+#endif
+
 /**
  * of_property_read_u8_array - Find and read an array of u8 from a property.
  *

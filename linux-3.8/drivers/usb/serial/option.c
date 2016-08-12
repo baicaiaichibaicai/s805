@@ -43,6 +43,31 @@
 #include <linux/usb/serial.h>
 #include "usb-wwan.h"
 
+#ifdef CONFIG_FERRET
+#include <linux/proc_fs.h>
+#define MAX_HSDPA       5
+struct _f_hsdpa{
+	__u16   v_id;
+	__u16   p_id;
+	__u8    en_port;
+	__u8    index;
+	__u8    endpoint;
+	__u8    start_minor;
+	void    *msg;
+
+};
+struct _f_hsdpa f_hsdpa[MAX_HSDPA];
+
+#define MSG_LEN         31
+static int bus_id;
+static int hsdpa_proc_init(void);
+static int __init hsdpa_init(void);
+static void __exit hsdpa_exit(void);
+static int find_hsdpa(struct usb_device *dev);
+static int get_index(struct usb_serial *serial);
+static int usb_mode_switch(struct usb_serial *serial);
+#endif
+
 /* Function prototypes */
 static int  option_probe(struct usb_serial *serial,
 			const struct usb_device_id *id);
@@ -78,6 +103,14 @@ static void option_instat_callback(struct urb *urb);
 #define OPTION_PRODUCT_ETNA_MODEM_EX		0x7061
 #define OPTION_PRODUCT_ETNA_KOI_MODEM		0x7100
 #define OPTION_PRODUCT_GTM380_MODEM		0x7201
+#ifdef CONFIG_FERRET
+#define OPTION_PRODUCT_SD_711           0x61e7
+#define OPTION_PRODUCT_SD_711_SERIAL    0x61e6
+#define OPTION_PRODUCT_CHU_628S         0x6281
+#define OPTION_PRODUCT_CHU_629S         0x700A
+#define OPTION_PRODUCT_CHU_629K         0x7003
+#define OPTION_PRODUCT_CBU_450D         0x700B
+#endif
 
 #define HUAWEI_VENDOR_ID			0x12D1
 #define HUAWEI_PRODUCT_E173			0x140C
@@ -545,6 +578,14 @@ static const struct option_blacklist_info telit_le920_blacklist = {
 };
 
 static const struct usb_device_id option_ids[] = {
+#ifdef CONFIG_FERRET
+	{ USB_DEVICE(CMOTECH_VENDOR_ID, OPTION_PRODUCT_CHU_628S) },
+	{ USB_DEVICE(CMOTECH_VENDOR_ID, OPTION_PRODUCT_CHU_629S) },
+	{ USB_DEVICE(CMOTECH_VENDOR_ID, OPTION_PRODUCT_CHU_629K) },
+	{ USB_DEVICE(CMOTECH_VENDOR_ID, OPTION_PRODUCT_CBU_450D) },
+	{ USB_DEVICE(LG_VENDOR_ID, OPTION_PRODUCT_SD_711) },
+	{ USB_DEVICE(LG_VENDOR_ID, OPTION_PRODUCT_SD_711_SERIAL) },
+#endif
 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_COLT) },
 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_RICOLA) },
 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_RICOLA_LIGHT) },
@@ -1410,6 +1451,9 @@ static int option_probe(struct usb_serial *serial,
 				&serial->interface->cur_altsetting->desc;
 	struct usb_device_descriptor *dev_desc = &serial->dev->descriptor;
 
+#ifdef CONFIG_FERRET
+	usb_mode_switch(serial);
+#endif
 	/* Never bind to the CD-Rom emulation interface	*/
 	if (iface_desc->bInterfaceClass == 0x08)
 		return -ENODEV;
@@ -1479,6 +1523,17 @@ static void option_release(struct usb_serial *serial)
 {
 	struct usb_wwan_intf_private *intfdata = usb_get_serial_data(serial);
 	struct option_private *priv = intfdata->private;
+#ifdef CONFIG_FERRET
+	int i;
+	if (bus_id > 0) {
+		bus_id = -1;
+		i = find_hsdpa(serial->dev);
+		if((i>=0) && (i<MAX_HSDPA)){
+			f_hsdpa[i].index = 0;
+			f_hsdpa[i].start_minor = 0;
+		}
+	}
+#endif
 
 	kfree(priv);
 	kfree(intfdata);
@@ -1565,6 +1620,146 @@ static int option_send_setup(struct usb_serial_port *port)
 				0x22, 0x21, val, priv->bInterfaceNumber, NULL,
 				0, USB_CTRL_SET_TIMEOUT);
 }
+
+#ifdef CONFIG_FERRET
+static const char msg_628s[]={0x55, 0x53, 0x42, 0x43, 0x12, 0x34, 0x56, 0x78, 0x24, 0x00,
+	0x00, 0x00, 0x80, 0x00, 0x08, 0xff, 0x52, 0x44, 0x45, 0x56,
+	0x43, 0x48, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+static const char msg_629s[]={0x55, 0x53, 0x42, 0x43, 0x12, 0x34, 0x56, 0x78, 0x24, 0x00,
+	0x00, 0x00, 0x80, 0x00, 0x0d, 0xfe, 0x52, 0x44, 0x45, 0x56,
+	0x43, 0x48, 0x47, 0x3d, 0x4e, 0x44, 0x49, 0x53, 0x00, 0x00, 0x00};
+static const char msg_sd711[]={0x55, 0x53, 0x42, 0x43, 0x12, 0x34, 0x56, 0x78, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x06, 0x1b, 0x00, 0x00, 0x00, 0x02,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+static int usb_mode_switch(struct usb_serial *serial)
+{
+	int i;
+	i = find_hsdpa(serial->dev);
+	if (i < 0)
+		return 0;
+
+	if (bus_id != serial->dev->portnum) {
+		int a_len = 0;
+		bus_id = serial->dev->portnum;
+
+		usb_bulk_msg(serial->dev, usb_sndbulkpipe(serial->dev, f_hsdpa[i].endpoint),
+				f_hsdpa[i].msg, MSG_LEN, &a_len, 20000);
+		f_hsdpa[i].index = get_index(serial);
+		f_hsdpa[i].start_minor = serial->minor;
+	}
+	return 0;
+}
+
+static int hsdpa_proc_read(char *page, char **start,off_t off, int count, int *eof,void *data)
+{
+	int n, ret = 0;
+	for(n=0; n<MAX_HSDPA; n++){
+		if(f_hsdpa[n].index > 0)
+			ret += snprintf(page+ret, count-ret, "PPP%d ttyUSB%d\n",
+					f_hsdpa[n].index, f_hsdpa[n].en_port+f_hsdpa[n].start_minor);
+	}
+	return ret;
+}
+
+static int hsdpa_proc_init(void)
+{
+	struct proc_dir_entry *p = NULL;
+	extern struct proc_dir_entry *proc_ferret_network;
+
+	p = create_proc_entry("hsdpa", 0, proc_ferret_network);
+
+	if (p == NULL) {
+		printk("Creating proc entry failed: /proc/ferret/network/hsdpa\n");
+		return -ENOMEM;
+	}
+
+	p->read_proc = hsdpa_proc_read;
+	return 0;
+}
+
+static int find_hsdpa(struct usb_device *dev)
+{
+	int n;
+
+	for(n=0; n<MAX_HSDPA; n++) {
+		if((le16_to_cpu(dev->descriptor.idVendor) == f_hsdpa[n].v_id) &&
+				(le16_to_cpu(dev->descriptor.idProduct) == f_hsdpa[n].p_id)) {
+			return n;
+		}
+	}
+	return -1;
+}
+
+int get_index(struct usb_serial *serial)
+{
+	return serial->dev->portnum;
+}
+
+static int __init hsdpa_init(void)
+{
+	f_hsdpa[0].msg = kmalloc(MSG_LEN, GFP_ATOMIC);
+	if(f_hsdpa[0].msg == NULL)
+		return -1;
+	memcpy(f_hsdpa[0].msg, msg_628s, MSG_LEN);
+	f_hsdpa[0].v_id = CMOTECH_VENDOR_ID;
+	f_hsdpa[0].p_id = OPTION_PRODUCT_CHU_628S;
+	f_hsdpa[0].en_port = 0;
+	f_hsdpa[0].endpoint = 9;
+
+	f_hsdpa[1].msg = kmalloc(MSG_LEN, GFP_ATOMIC);
+	if(f_hsdpa[1].msg == NULL)
+		return -1;
+	memcpy(f_hsdpa[1].msg, msg_629s, MSG_LEN);
+	f_hsdpa[1].v_id = CMOTECH_VENDOR_ID;
+	f_hsdpa[1].p_id = OPTION_PRODUCT_CHU_629S;
+	f_hsdpa[1].en_port = 3;
+	f_hsdpa[1].endpoint = 1;
+
+	f_hsdpa[2].msg = kmalloc(MSG_LEN, GFP_ATOMIC);
+	if(f_hsdpa[2].msg == NULL)
+		return -1;
+	memcpy(f_hsdpa[2].msg, msg_629s, MSG_LEN);
+	f_hsdpa[2].v_id = CMOTECH_VENDOR_ID;
+	f_hsdpa[2].p_id = OPTION_PRODUCT_CBU_450D;
+	f_hsdpa[2].en_port = 3;
+	f_hsdpa[2].endpoint = 1;
+
+	f_hsdpa[3].msg = kmalloc(MSG_LEN, GFP_ATOMIC);
+	if(f_hsdpa[3].msg == NULL)
+		return -1;
+	memcpy(f_hsdpa[3].msg, msg_629s, MSG_LEN);
+	f_hsdpa[3].v_id = CMOTECH_VENDOR_ID;
+	f_hsdpa[3].p_id = OPTION_PRODUCT_CHU_629K;
+	f_hsdpa[3].en_port = 3;
+	f_hsdpa[3].endpoint = 1;
+
+	f_hsdpa[4].msg = kmalloc(MSG_LEN, GFP_ATOMIC);
+	if(f_hsdpa[4].msg == NULL)
+		return -1;
+	memcpy(f_hsdpa[4].msg, msg_sd711, MSG_LEN);
+	f_hsdpa[4].v_id = LG_VENDOR_ID;
+	f_hsdpa[4].p_id = OPTION_PRODUCT_SD_711_SERIAL;
+	f_hsdpa[4].en_port = 2;
+	f_hsdpa[4].endpoint = 1;
+
+	hsdpa_proc_init();
+}
+
+static void __exit hsdpa_exit(void)
+{
+	int n;
+	for(n=0; n<MAX_HSDPA; n++){
+		if(f_hsdpa[n].msg) {
+			kfree(f_hsdpa[n].msg);
+			f_hsdpa[n].msg = NULL;
+		}
+	}
+}
+
+module_init(hsdpa_init);
+module_exit(hsdpa_exit);
+#endif
 
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);

@@ -40,7 +40,9 @@ extern void __kernel_fpu_end(void);
 
 static inline void kernel_fpu_begin(void)
 {
+#ifndef CONFIG_FERRET
 	WARN_ON_ONCE(!irq_fpu_usable());
+#endif
 	preempt_disable();
 	__kernel_fpu_begin();
 }

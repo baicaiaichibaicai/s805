@@ -235,6 +235,14 @@ extern struct device_node *of_find_node_with_property(
 extern struct property *of_find_property(const struct device_node *np,
 					 const char *name,
 					 int *lenp);
+
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+extern int of_property_read_u32_index(const struct device_node *np,
+				       const char *propname,
+				       u32 index, u32 *out_value);
+#endif
 extern int of_property_read_u8_array(const struct device_node *np,
 			const char *propname, u8 *out_values, size_t sz);
 extern int of_property_read_u16_array(const struct device_node *np,
@@ -277,6 +285,13 @@ extern struct device_node *of_parse_phandle(const struct device_node *np,
 extern int of_parse_phandle_with_args(const struct device_node *np,
 	const char *list_name, const char *cells_name, int index,
 	struct of_phandle_args *out_args);
+
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+extern int of_count_phandle_with_args(const struct device_node *np,
+	const char *list_name, const char *cells_name);
+#endif
 
 extern void of_alias_scan(void * (*dt_alloc)(u64 size, u64 align));
 extern int of_alias_get_id(struct device_node *np, const char *stem);
@@ -351,6 +366,15 @@ static inline struct device_node *of_find_node_by_name(struct device_node *from,
 	return NULL;
 }
 
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+static inline struct device_node *of_get_parent(const struct device_node *node)
+{
+	return NULL;
+}
+#endif
+
 static inline bool of_have_populated_dt(void)
 {
 	return false;
@@ -377,6 +401,16 @@ static inline int of_device_is_compatible(const struct device_node *device,
 	return 0;
 }
 
+
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+static inline int of_device_is_available(const struct device_node *device)
+{
+	return 0;
+}
+#endif
+
 static inline struct property *of_find_property(const struct device_node *np,
 						const char *name,
 						int *lenp)
@@ -391,6 +425,16 @@ static inline struct device_node *of_find_compatible_node(
 {
 	return NULL;
 }
+
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+static inline int of_property_read_u32_index(const struct device_node *np,
+			const char *propname, u32 index, u32 *out_value)
+{
+	return -ENOSYS;
+}
+#endif
 
 static inline int of_property_read_u8_array(const struct device_node *np,
 			const char *propname, u8 *out_values, size_t sz)
@@ -467,6 +511,18 @@ static inline int of_parse_phandle_with_args(struct device_node *np,
 	return -ENOSYS;
 }
 
+
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+static inline int of_count_phandle_with_args(struct device_node *np,
+					     const char *list_name,
+					     const char *cells_name)
+{
+	return -ENOSYS;
+}
+#endif
+
 static inline int of_alias_get_id(struct device_node *np, const char *stem)
 {
 	return -ENOSYS;
@@ -530,5 +586,17 @@ static inline int of_property_read_u32(const struct device_node *np,
 {
 	return of_property_read_u32_array(np, propname, out_value, 1);
 }
+
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+#if defined(CONFIG_PROC_FS) && defined(CONFIG_PROC_DEVICETREE)
+extern void proc_device_tree_add_node(struct device_node *, struct proc_dir_entry *);
+extern void proc_device_tree_add_prop(struct proc_dir_entry *pde, struct property *prop);
+extern void proc_device_tree_remove_prop(struct proc_dir_entry *pde,
+					 struct property *prop);
+extern void proc_device_tree_update_prop(struct proc_dir_entry *pde,
+					 struct property *newprop,
+					 struct property *oldprop);
+#endif
+#endif
 
 #endif /* _LINUX_OF_H */

@@ -1,11 +1,13 @@
 #
 # Cavium Octeon
 #
-platform-$(CONFIG_CPU_CAVIUM_OCTEON)	+= cavium-octeon/
-cflags-$(CONFIG_CPU_CAVIUM_OCTEON)	+=				\
+platform-$(CONFIG_OCTEON_FUTURE_BOARD)	+= cavium-octeon/
+cflags-$(CONFIG_OCTEON_FUTURE_BOARD)	+=				\
 		-I$(srctree)/arch/mips/include/asm/mach-cavium-octeon
-ifdef CONFIG_CAVIUM_OCTEON_2ND_KERNEL
-load-$(CONFIG_CPU_CAVIUM_OCTEON)	+= 0xffffffff84100000
+
+ifdef CONFIG_MAPPED_KERNEL
+  load-$(CONFIG_OCTEON_FUTURE_BOARD)    = 0xffffffffc0000000
 else
-load-$(CONFIG_CPU_CAVIUM_OCTEON)	+= 0xffffffff81100000
+  load-$(CONFIG_OCTEON_FUTURE_BOARD)    = 0xffffffff80100000
 endif
+

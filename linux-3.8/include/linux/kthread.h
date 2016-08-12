@@ -43,6 +43,12 @@ bool kthread_should_stop(void);
 bool kthread_should_park(void);
 bool kthread_freezable_should_stop(bool *was_frozen);
 void *kthread_data(struct task_struct *k);
+
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+void *probe_kthread_data(struct task_struct *k);
+#endif
 int kthread_park(struct task_struct *k);
 void kthread_unpark(struct task_struct *k);
 void kthread_parkme(void);

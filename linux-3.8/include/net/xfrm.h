@@ -28,6 +28,11 @@
 #include <net/snmp.h>
 #endif
 
+#ifdef CONFIG_FERRET_IPSEC
+#include <future/ipsec/ipsec.h>
+#include <future/ipsec/ipsec_util.h>
+#endif
+
 #define XFRM_PROTO_ESP		50
 #define XFRM_PROTO_AH		51
 #define XFRM_PROTO_COMP		108
@@ -138,12 +143,22 @@ struct xfrm_state {
 	struct hlist_node	bysrc;
 	struct hlist_node	byspi;
 
+#ifdef CONFIG_FERRET_IPSEC
+	struct hlist_node	bysend;
+	struct hlist_node	byrcv;
+#endif
+
 	atomic_t		refcnt;
 	spinlock_t		lock;
 
 	struct xfrm_id		id;
 	struct xfrm_selector	sel;
 	struct xfrm_mark	mark;
+#ifdef FERRET_VPN_MULTINET
+	u32			status;
+	bool		is_outbound;
+	struct xfrm_selector_ext    *ext;
+#endif
 	u32			tfcpad;
 
 	u32			genid;
@@ -522,6 +537,9 @@ struct xfrm_policy {
 	struct xfrm_lifetime_cfg lft;
 	struct xfrm_lifetime_cur curlft;
 	struct xfrm_policy_walk_entry walk;
+#ifdef FERRET_VPN_MULTINET
+	struct xfrm_selector_ext    *ext;
+#endif
 	u8			type;
 	u8			action;
 	u8			flags;
@@ -845,6 +863,7 @@ static inline bool addr4_match(__be32 a1, __be32 a2, u8 prefixlen)
 	return !((a1 ^ a2) & htonl(0xFFFFFFFFu << (32 - prefixlen)));
 }
 
+
 static __inline__
 __be16 xfrm_flowi_sport(const struct flowi *fl, const union flowi_uli *uli)
 {
@@ -896,9 +915,16 @@ __be16 xfrm_flowi_dport(const struct flowi *fl, const union flowi_uli *uli)
 	return port;
 }
 
+#ifdef FERRET_VPN_MULTINET
+extern struct xfrm_selector_ext * alloc_xfrm_selector_ext(int src_count, int dst_count);
+extern void free_xfrm_selector_ext(struct xfrm_selector_ext *net);
+extern bool xfrm_selector_match(const struct xfrm_state *, const struct xfrm_policy *, 
+				const struct flowi *, unsigned short );
+#else
 extern bool xfrm_selector_match(const struct xfrm_selector *sel,
 				const struct flowi *fl,
 				unsigned short family);
+#endif
 
 #ifdef CONFIG_SECURITY_NETWORK_XFRM
 /*	If neither has a context --> match
@@ -970,11 +996,29 @@ static inline void xfrm_dst_destroy(struct xfrm_dst *xdst)
 
 extern void xfrm_dst_ifdown(struct dst_entry *dst, struct net_device *dev);
 
+#ifdef CONFIG_INET_IPSEC_SAREF
+typedef unsigned int xfrm_sec_unique_t;
+#endif
+
 struct sec_path {
 	atomic_t		refcnt;
+#ifdef CONFIG_INET_IPSEC_SAREF
+	xfrm_sec_unique_t ref; /*Reference to high-level policy*/
+#endif
 	int			len;
 	struct xfrm_state	*xvec[XFRM_MAX_DEPTH];
 };
+
+#ifdef CONFIG_INET_IPSEC_SAREF
+struct ipcm_cookie;
+struct ipsec_secpath_saref_ops {
+	int (*set_ipc_saref)(struct ipcm_cookie *ipc, xfrm_sec_unique_t saref);
+	void (*get_secpath_sarefs)(struct sec_path *sp,
+			xfrm_sec_unique_t *refme, xfrm_sec_unique_t *refhim);
+};
+extern int register_ipsec_secpath_saref_ops(struct ipsec_secpath_saref_ops *ops);
+extern void unregister_ipsec_secpath_saref_ops(struct ipsec_secpath_saref_ops *ops);
+#endif
 
 static inline int secpath_exists(struct sk_buff *skb)
 {
@@ -1003,6 +1047,24 @@ secpath_put(struct sec_path *sp)
 }
 
 extern struct sec_path *secpath_dup(struct sec_path *src);
+
+#ifdef CONFIG_INET_IPSEC_SAREF
+/*
+ * Attach IPsec Saref value to skb, if appropriate.
+ */
+static inline void skb_sec_assign_sk_saref(struct sk_buff *skb, struct sock *sk)
+{
+#if defined (CONFIG_XFRM)
+	if(sk->sk_saref) {
+		if(!skb->sp)
+			skb->sp = secpath_dup(NULL);
+		if(skb->sp)
+			skb->sp->ref = sk->sk_saref;
+	}
+#endif
+}
+#endif
+
 
 static inline void
 secpath_reset(struct sk_buff *skb)
@@ -1390,6 +1452,20 @@ extern int xfrm_state_walk(struct net *net, struct xfrm_state_walk *walk,
 			   int (*func)(struct xfrm_state *, int, void*), void *);
 extern void xfrm_state_walk_done(struct xfrm_state_walk *walk);
 extern struct xfrm_state *xfrm_state_alloc(struct net *net);
+#ifdef CONFIG_FERRET_IPSEC
+extern void srch_xfrm_state(int (*func)(struct xfrm_state *, int count, void *data), void *data);
+extern struct xfrm_state *future_xfrm_rcv_lookup(struct net *net, u32 mark,
+		                    const xfrm_address_t *daddr, __be32 spi,
+							u8 proto, unsigned short family);
+extern struct xfrm_state* future_xfrm_send_lookup(struct net *net, const __be32 daddr, const __be32 saddr);
+extern struct xfrm_state* future_find_xfrm_state_continue(struct xfrm_state* start, const __be32 daddr, const __be32 saddr);
+extern struct xfrm_state* future_xfrm_spi_lookup(struct net *net, const __be32 spi, const __be32 daddr,
+		               u8 proto, unsigned short family);
+extern struct xfrm_state* future_xfrm_spi_lookup_v6(struct net *net, const __be32 spi, const xfrm_address_t *daddr,
+		               u8 proto, unsigned short family);
+
+
+#endif
 extern struct xfrm_state *xfrm_state_find(const xfrm_address_t *daddr,
 					  const xfrm_address_t *saddr,
 					  const struct flowi *fl,
@@ -1413,6 +1489,7 @@ extern struct xfrm_state *xfrm_state_lookup_byaddr(struct net *net, u32 mark,
 						   const xfrm_address_t *saddr,
 						   u8 proto,
 						   unsigned short family);
+
 #ifdef CONFIG_XFRM_SUB_POLICY
 extern int xfrm_tmpl_sort(struct xfrm_tmpl **dst, struct xfrm_tmpl **src,
 			  int n, unsigned short family);
@@ -1528,7 +1605,11 @@ extern void xfrm_policy_walk_init(struct xfrm_policy_walk *walk, u8 type);
 extern int xfrm_policy_walk(struct net *net, struct xfrm_policy_walk *walk,
 	int (*func)(struct xfrm_policy *, int, int, void*), void *);
 extern void xfrm_policy_walk_done(struct xfrm_policy_walk *walk);
+#ifdef FERRET_VPN_MULTI_POLICY
+int xfrm_policy_insert(int dir, struct xfrm_policy *policy, int excl, struct del_tmpl* del_tmpl);
+#else
 int xfrm_policy_insert(int dir, struct xfrm_policy *policy, int excl);
+#endif
 struct xfrm_policy *xfrm_policy_bysel_ctx(struct net *net, u32 mark,
 					  u8 type, int dir,
 					  struct xfrm_selector *sel,
@@ -1678,6 +1759,9 @@ static inline void xfrm_states_delete(struct xfrm_state **states, int n)
 #ifdef CONFIG_XFRM
 static inline struct xfrm_state *xfrm_input_state(struct sk_buff *skb)
 {
+#ifdef CONFIG_FERRET_IPSEC
+	if ( skb->decrypt_sa ) return skb->decrypt_sa;
+#endif
 	return skb->sp->xvec[skb->sp->len - 1];
 }
 #endif

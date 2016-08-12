@@ -37,6 +37,7 @@
 #include <linux/atomic.h>
 #include <asm/cpu.h>
 #include <asm/processor.h>
+#include <asm/idle.h>
 #include <asm/r4k-timer.h>
 #include <asm/mmu_context.h>
 #include <asm/time.h>
@@ -83,6 +84,7 @@ static inline void set_cpu_sibling_map(int cpu)
 }
 
 struct plat_smp_ops *mp_ops;
+EXPORT_SYMBOL(mp_ops);
 
 __cpuinit void register_smp_ops(struct plat_smp_ops *ops)
 {
@@ -139,7 +141,9 @@ asmlinkage __cpuinit void start_secondary(void)
 	WARN_ON_ONCE(!irqs_disabled());
 	mp_ops->smp_finish();
 
-	cpu_idle();
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+	cpu_startup_entry(CPUHP_ONLINE);
+#endif
 }
 
 /*
@@ -147,10 +151,20 @@ asmlinkage __cpuinit void start_secondary(void)
  */
 void __irq_entry smp_call_function_interrupt(void)
 {
+#ifdef CONFIG_MICROSTATE_ACCT
+	/*
+	 * When MSA is enabled, the caller must call irq_enter() and
+	 * irq_exit().
+	 */
+	BUG_ON(!in_irq());
+#else
 	irq_enter();
+#endif
 	generic_smp_call_function_single_interrupt();
 	generic_smp_call_function_interrupt();
+#ifndef CONFIG_MICROSTATE_ACCT
 	irq_exit();
+#endif
 }
 
 static void stop_this_cpu(void *dummy)

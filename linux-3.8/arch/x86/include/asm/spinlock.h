@@ -181,6 +181,7 @@ static inline void arch_read_lock(arch_rwlock_t *rw)
 static inline void arch_write_lock(arch_rwlock_t *rw)
 {
 	asm volatile(LOCK_PREFIX WRITE_LOCK_SUB(%1) "(%0)\n\t"
+			"nop\n"
 		     "jz 1f\n"
 		     "call __write_lock_failed\n\t"
 		     "1:\n"

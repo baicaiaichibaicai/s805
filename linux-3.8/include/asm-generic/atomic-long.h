@@ -22,6 +22,70 @@
 
 typedef atomic64_t atomic_long_t;
 
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+#ifdef CONFIG_PAX_REFCOUNT
+typedef atomic64_unchecked_t atomic_long_unchecked_t;
+static inline long atomic_long_read_unchecked(atomic_long_unchecked_t *l)
+{   
+	atomic64_unchecked_t *v = (atomic64_unchecked_t *)l;
+
+	return (long)atomic64_read_unchecked(v);
+}
+
+static inline void atomic_long_set_unchecked(atomic_long_unchecked_t *l, long i)
+{
+	atomic64_unchecked_t *v = (atomic64_unchecked_t *)l;
+
+	atomic64_set_unchecked(v, i);
+}
+
+static inline void atomic_long_inc_unchecked(atomic_long_unchecked_t *l)
+{
+	atomic64_unchecked_t *v = (atomic64_unchecked_t *)l;
+
+	atomic64_inc_unchecked(v);
+}
+
+static inline void atomic_long_dec_unchecked(atomic_long_unchecked_t *l)
+{
+	    atomic64_unchecked_t *v = (atomic64_unchecked_t *)l;
+
+	        atomic64_dec_unchecked(v);
+}
+
+static inline void atomic_long_add_unchecked(long i, atomic_long_unchecked_t *l)
+{
+	    atomic64_unchecked_t *v = (atomic64_unchecked_t *)l;
+
+	        atomic64_add_unchecked(i, v);
+}
+
+static inline void atomic_long_sub_unchecked(long i, atomic_long_unchecked_t *l)
+{
+	    atomic64_unchecked_t *v = (atomic64_unchecked_t *)l;
+
+	        atomic64_sub_unchecked(i, v);
+}
+
+static inline long atomic_long_add_return_unchecked(long i, atomic_long_unchecked_t *l)
+{
+	    atomic64_unchecked_t *v = (atomic64_unchecked_t *)l;
+
+	        return (long)atomic64_add_return_unchecked(i, v);
+}
+
+static inline long atomic_long_inc_return_unchecked(atomic_long_unchecked_t *l)
+{
+	    atomic64_unchecked_t *v = (atomic64_unchecked_t *)l;
+
+	        return (long)atomic64_inc_return_unchecked(v);
+}
+
+#else
+typedef atomic64_t atomic_long_unchecked_t;
+#endif
+#endif
+
 #define ATOMIC_LONG_INIT(i)	ATOMIC64_INIT(i)
 
 static inline long atomic_long_read(atomic_long_t *l)

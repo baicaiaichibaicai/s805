@@ -32,6 +32,13 @@
 #include <linux/hrtimer.h>
 #include <linux/dma-mapping.h>
 #include <linux/netdev_features.h>
+#ifdef CONFIG_FERRET_IPSEC
+#include <linux/xfrm.h>
+#endif
+
+#ifdef CONFIG_OMNI
+#include <future/omni_track.h>
+#endif
 
 /* Don't change this without changing skb_csum_unnecessary! */
 #define CHECKSUM_NONE 0
@@ -324,7 +331,7 @@ typedef unsigned char *sk_buff_data_t;
 #define NET_SKBUFF_NF_DEFRAG_NEEDED 1
 #endif
 
-/** 
+/**
  *	struct sk_buff - socket buffer
  *	@next: Next buffer in list
  *	@prev: Previous buffer in list
@@ -388,6 +395,10 @@ typedef unsigned char *sk_buff_data_t;
  *	@truesize: Buffer size
  *	@users: User count - see {datagram,tcp}.c
  */
+enum IPS_check_status {
+	O_IPS_NOT_CHECK = 0,
+	O_IPS_CHECK,
+};
 
 struct sk_buff {
 	/* These two members must be first. */
@@ -398,7 +409,9 @@ struct sk_buff {
 
 	struct sock		*sk;
 	struct net_device	*dev;
-
+#ifdef CONFIG_OMNI
+	struct net_device	*raw_dev;
+#endif
 	/*
 	 * This is the control buffer. It is free to use for every
 	 * layer. Please put your private variables there. If you
@@ -412,9 +425,9 @@ struct sk_buff {
 	struct	sec_path	*sp;
 #endif
 	unsigned int		len,
-				data_len;
+						data_len;
 	__u16			mac_len,
-				hdr_len;
+					hdr_len;
 	union {
 		__wsum		csum;
 		struct {
@@ -425,19 +438,32 @@ struct sk_buff {
 	__u32			priority;
 	kmemcheck_bitfield_begin(flags1);
 	__u8			local_df:1,
-				cloned:1,
-				ip_summed:2,
-				nohdr:1,
-				nfctinfo:3;
+					cloned:1,
+					ip_summed:2,
+					nohdr:1,
+					nfctinfo:3;
 	__u8			pkt_type:3,
-				fclone:2,
-				ipvs_property:1,
-				peeked:1,
-				nf_trace:1;
+					fclone:2,
+					ipvs_property:1,
+					peeked:1,
+					nf_trace:1;
+#ifdef CONFIG_OMNI
+	__u8			trackinfo:3,
+					dir:1,
+					fast:1,
+					inspect:2;
+#endif
 	kmemcheck_bitfield_end(flags1);
 	__be16			protocol;
 
 	void			(*destructor)(struct sk_buff *skb);
+#ifdef CONFIG_SMB_TUNING
+	int                     (*skb_recycle) (struct sk_buff *skb);
+#endif
+#ifdef CONFIG_NET_SKB_RECYCLING
+	unsigned char 	*rcl_head;
+	unsigned int 	rcl_len;
+#endif
 #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
 	struct nf_conntrack	*nfct;
 #endif
@@ -446,6 +472,11 @@ struct sk_buff {
 #endif
 #ifdef CONFIG_BRIDGE_NETFILTER
 	struct nf_bridge_info	*nf_bridge;
+#endif
+#ifdef CONFIG_OMNI
+	struct omni_track *track;
+	__u16 vlan_id;
+	__u8 vlan_cos;
 #endif
 
 	int			skb_iif;
@@ -494,6 +525,24 @@ struct sk_buff {
 		__u32		avail_size;
 	};
 
+#if IS_ENABLED(CONFIG_FERRET)
+	__u32 d_fwd;
+	__u32 d_fwd2;
+	__u8 from_pre;  // Is this skb from prerouting?
+#ifdef CONFIG_FERRET_IPSEC
+	struct xfrm_state	*decrypt_sa;
+	__u32 				decrypt_reqid;
+	__u32 				decrypt_spi;
+	__u8 				decrypt_proto;
+	__u8				reserved[6];
+	bool				was_decrypted;
+	bool				is_spoke;
+#endif
+#endif/*CONFIG_FERRET*/
+#ifdef CONFIG_FERRET_DDOS
+	void *fddos;
+#endif
+
 	sk_buff_data_t		inner_transport_header;
 	sk_buff_data_t		inner_network_header;
 	sk_buff_data_t		transport_header;
@@ -503,7 +552,16 @@ struct sk_buff {
 	sk_buff_data_t		tail;
 	sk_buff_data_t		end;
 	unsigned char		*head,
-				*data;
+						*data;
+#ifdef CONFIG_CORTINA_FUTURE  //CONFIG_SKB_UNCACHABLE_DATA
+	dma_addr_t		head_pa;
+#endif
+	/*for HW ACCELERATION cs_cb poitner */
+	__u32 cs_cb_loc;
+#if IS_ENABLED(CONFIG_FERRET)
+	__u8            white;
+	__u8            mirror;
+#endif    
 	unsigned int		truesize;
 	atomic_t		users;
 };
@@ -514,6 +572,21 @@ struct sk_buff {
  */
 #include <linux/slab.h>
 
+#ifdef CONFIG_NET_SKB_RECYCLING
+#define SKB_RECYCLE_QUEUE_PER_CPU	1024
+#define SKB_RECYCLE_PACKET_SIZE		1600
+
+struct skb_recycle_info {
+	struct sk_buff_head list ____cacheline_aligned;
+	int maxlen;
+
+	uint32_t hit;
+	uint32_t miss;
+	uint32_t other;
+};
+extern bool omni_skb_recycle(struct sk_buff *skb);
+extern struct sk_buff *omni_get_recycle(unsigned int size);
+#endif
 
 #define SKB_ALLOC_FCLONE	0x01
 #define SKB_ALLOC_RX		0x02
@@ -539,7 +612,7 @@ static inline bool skb_pfmemalloc(const struct sk_buff *skb)
  */
 static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
 {
-	/* If refdst was not refcounted, check we still are in a 
+	/* If refdst was not refcounted, check we still are in a
 	 * rcu_read_lock section
 	 */
 	WARN_ON((skb->_skb_refdst & SKB_DST_NOREF) &&
@@ -577,6 +650,7 @@ static inline struct rtable *skb_rtable(const struct sk_buff *skb)
 	return (struct rtable *)skb_dst(skb);
 }
 
+extern void skb_release_head_state(struct sk_buff *skb);
 extern void kfree_skb(struct sk_buff *skb);
 extern void skb_tx_error(struct sk_buff *skb);
 extern void consume_skb(struct sk_buff *skb);
@@ -590,17 +664,34 @@ extern bool skb_try_coalesce(struct sk_buff *to, struct sk_buff *from,
 extern struct sk_buff *__alloc_skb(unsigned int size,
 				   gfp_t priority, int flags, int node);
 extern struct sk_buff *build_skb(void *data, unsigned int frag_size);
+#ifdef CONFIG_CORTINA_FUTURE //CONFIG_SKB_UNCACHABLE_DATA
+extern struct sk_buff *__alloc_skb_uncachable(unsigned int size,
+				   gfp_t priority, int fclone, int node);
+#endif
+
 static inline struct sk_buff *alloc_skb(unsigned int size,
 					gfp_t priority)
 {
 	return __alloc_skb(size, priority, 0, NUMA_NO_NODE);
 }
 
+#ifdef CONFIG_CORTINA_FUTURE //CONFIG_SKB_UNCACHABLE_DATA
+static inline struct sk_buff *alloc_skb_uncachable(unsigned int size,
+					gfp_t priority)
+{
+	return __alloc_skb_uncachable(size, priority, 0, -1);
+}
+#endif
+
 static inline struct sk_buff *alloc_skb_fclone(unsigned int size,
 					       gfp_t priority)
 {
 	return __alloc_skb(size, priority, SKB_ALLOC_FCLONE, NUMA_NO_NODE);
 }
+#ifdef CONFIG_SMB_TUNING
+extern void skb_recycle(struct sk_buff *skb);
+extern bool skb_recycle_check(struct sk_buff *skb, int skb_size);
+#endif
 
 extern struct sk_buff *skb_morph(struct sk_buff *dst, struct sk_buff *src);
 extern int skb_copy_ubufs(struct sk_buff *skb, gfp_t gfp_mask);
@@ -1722,7 +1813,11 @@ static inline int pskb_network_may_pull(struct sk_buff *skb, unsigned int len)
  * NET_IP_ALIGN(2) + ethernet_header(14) + IP_header(20/40) + ports(8)
  */
 #ifndef NET_SKB_PAD
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+#define NET_SKB_PAD	32
+#else
 #define NET_SKB_PAD	max(32, L1_CACHE_BYTES)
+#endif
 #endif
 
 extern int ___pskb_trim(struct sk_buff *skb, unsigned int len);
@@ -1816,6 +1911,20 @@ static inline void __skb_queue_purge(struct sk_buff_head *list)
 }
 
 extern void *netdev_alloc_frag(unsigned int fragsz);
+#ifdef CONFIG_CORTINA_FUTURE //CONFIG_SKB_UNCACHABLE_DATA
+static inline struct sk_buff *__dev_alloc_skb_uncachable(unsigned int length,
+					      gfp_t gfp_mask)
+{
+	struct sk_buff *skb = alloc_skb_uncachable(length + NET_SKB_PAD, gfp_mask);
+	if (likely(skb))
+		skb_reserve(skb, NET_SKB_PAD);
+	return skb;
+}
+#endif
+
+#ifdef CONFIG_CORTINA_FUTURE //CONFIG_SKB_UNCACHABLE_DATA
+extern struct sk_buff *dev_alloc_skb_uncachable(unsigned int length);
+#endif
 
 extern struct sk_buff *__netdev_alloc_skb(struct net_device *dev,
 					  unsigned int length,
@@ -2132,7 +2241,7 @@ static inline int skb_cow_head(struct sk_buff *skb, unsigned int headroom)
  *	is untouched. Otherwise it is extended. Returns zero on
  *	success. The skb is freed on error.
  */
- 
+
 static inline int skb_padto(struct sk_buff *skb, unsigned int len)
 {
 	unsigned int size = skb->len;
@@ -2303,6 +2412,13 @@ extern unsigned int    datagram_poll(struct file *file, struct socket *sock,
 extern int	       skb_copy_datagram_iovec(const struct sk_buff *from,
 					       int offset, struct iovec *to,
 					       int size);
+#ifdef CONFIG_VFS_FASTPATH
+//Patch by G2NAS:enhance performance from socket to file
+extern int             skb_copy_datagram_to_kernel_iovec(const struct sk_buff *from,
+                                               int offset, struct iovec *to,
+                                               int size);
+#endif
+
 extern int	       skb_copy_and_csum_datagram_iovec(struct sk_buff *skb,
 							int hlen,
 							struct iovec *iov);
@@ -2642,6 +2758,13 @@ static inline void skb_init_secmark(struct sk_buff *skb)
 { }
 #endif
 
+#ifdef CONFIG_OMNI
+static inline struct omni_track *skb_track(struct sk_buff *skb)
+{
+	return (skb->track) ? skb->track : NULL;
+}
+#endif
+
 static inline void skb_set_queue_mapping(struct sk_buff *skb, u16 queue_mapping)
 {
 	skb->queue_mapping = queue_mapping;
@@ -2751,5 +2874,85 @@ static inline bool skb_head_is_locked(const struct sk_buff *skb)
 {
 	return !skb->head_frag || skb_cloned(skb);
 }
+
+static inline bool skb_is_recycleable(const struct sk_buff *skb, int skb_size)
+{
+/* debug_Aaron 2013/05/14 implement non-cacheable for performace tuning */
+#ifdef CONFIG_CORTINA_FUTURE //CONFIG_SKB_UNCACHABLE_DATA
+	if (skb->head_pa != 0)
+		return false;
+#endif
+
+	if (irqs_disabled())
+		return false;
+
+	if (skb_shinfo(skb)->tx_flags & SKBTX_DEV_ZEROCOPY)
+		return false;
+
+	if (skb_is_nonlinear(skb) || skb->fclone != SKB_FCLONE_UNAVAILABLE)
+		return false;
+
+	skb_size = SKB_DATA_ALIGN(skb_size + NET_SKB_PAD);
+	if (skb_end_pointer(skb) - skb->head < skb_size)
+		return false;
+
+	if (skb_shared(skb) || skb_cloned(skb))
+		return false;
+
+	return true;
+}
+
+//by ung
+static inline void __d_fwd_copy(struct sk_buff *dst, const struct sk_buff *src)
+{
+#if IS_ENABLED(CONFIG_FERRET)
+	dst->d_fwd = src->d_fwd;
+	dst->d_fwd2 = src->d_fwd2;
+#endif/*CONFIG_FERRET*/
+}
+
+static inline void d_fwd_copy(struct sk_buff *dst, const struct sk_buff *src)
+{
+	__d_fwd_copy(dst, src);
+}
+
+#if IS_ENABLED(CONFIG_OMNI)
+extern void omni_track_destroy(struct omni_track *track);
+extern void __omni_track_put(struct omni_track *track);
+
+static inline void __omni_track_get(struct omni_track *track)
+{
+#if 0
+	if (track)
+		atomic_inc(&track->use);
+#endif
+}
+#endif/*CONFIG_OMNI*/
+
+static inline void omni_reset(struct sk_buff *skb)
+{
+#if IS_ENABLED(CONFIG_OMNI)
+	__omni_track_put(skb->track);
+	skb->track = NULL;
+#endif/*CONFIG_OMNI*/
+}
+
+static inline void __omni_copy(struct sk_buff *dst, const struct sk_buff *src)
+{
+#if IS_ENABLED(CONFIG_OMNI)
+	dst->track = src->track;
+	__omni_track_get(src->track);
+	dst->trackinfo = src->trackinfo;
+#endif/*CONFIG_OMNI*/
+}
+
+static inline void omni_copy(struct sk_buff *dst, const struct sk_buff *src)
+{
+#if IS_ENABLED(CONFIG_OMNI)
+	__omni_track_put(dst->track);
+#endif/*CONFIG_OMNI*/
+	__omni_copy(dst, src);
+}
+
 #endif	/* __KERNEL__ */
 #endif	/* _LINUX_SKBUFF_H */

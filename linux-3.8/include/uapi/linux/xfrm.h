@@ -3,6 +3,9 @@
 
 #include <linux/types.h>
 
+#ifdef CONFIG_FERRET_IPSEC
+#include <future/ipsec/ipsec.h>
+#endif
 /* All of the structures in this file may not change size as they are
  * passed into the kernel from userspace via netlink sockets.
  */
@@ -46,6 +49,12 @@ struct xfrm_sec_ctx {
 struct xfrm_selector {
 	xfrm_address_t	daddr;
 	xfrm_address_t	saddr;
+#ifdef FERRET_VPN_RANGE
+	xfrm_address_t	daddr_e;
+	xfrm_address_t	saddr_e;
+	__u8	is_range_src;
+	__u8	is_range_dst;
+#endif
 	__be16	dport;
 	__be16	dport_mask;
 	__be16	sport;
@@ -57,6 +66,47 @@ struct xfrm_selector {
 	int	ifindex;
 	__kernel_uid32_t	user;
 };
+
+#ifdef FERRET_VPN_MULTINET
+typedef struct xfrm_net {
+	__u16           type; // 0:none, 1:single, 4:netmask, 7:range
+	__u16           is_hubnet; 
+	xfrm_address_t  addr[2];
+}xfrm_net;
+
+typedef struct xfrm_net_info {
+	int 			count;
+	xfrm_net        *net;
+}xfrm_net_info;
+
+struct xfrm_user_selector_ext_info {
+	__be16	dport;
+	__be16	dport_mask;
+	__be16	sport;
+	__be16	sport_mask;
+	__u16	family;
+	__u8	proto;
+	__u8	reserved;
+	int	ifindex;
+	__be32  other_spi;
+};
+
+struct xfrm_selector_ext {
+	xfrm_net_info	src;
+	xfrm_net_info	dst;
+	__be16	dport;
+	__be16	dport_mask;
+	__be16	sport;
+	__be16	sport_mask;
+	__u16	family;
+	__u8	prefixlen_d;
+	__u8	prefixlen_s;
+	__u8	proto;
+	int	ifindex;
+	__kernel_uid32_t	user;
+	__be32  other_spi;
+};
+#endif
 
 #define XFRM_INF (~(__u64)0)
 
@@ -212,6 +262,13 @@ enum {
 
 	XFRM_MSG_MAPPING,
 #define XFRM_MSG_MAPPING XFRM_MSG_MAPPING
+
+#ifdef CONFIG_FERRET_IPSEC
+	XFRM_MSG_GETIF,
+#define XFRM_MSG_GETIF XFRM_MSG_GETIF
+	XFRM_MSG_SETIF,
+#define XFRM_MSG_GETIF XFRM_MSG_GETIF
+#endif
 	__XFRM_MSG_MAX
 };
 #define XFRM_MSG_MAX (__XFRM_MSG_MAX - 1)
@@ -297,6 +354,11 @@ enum xfrm_attr_type_t {
 	XFRMA_MARK,		/* struct xfrm_mark */
 	XFRMA_TFCPAD,		/* __u32 */
 	XFRMA_REPLAY_ESN_VAL,	/* struct xfrm_replay_esn */
+#ifdef FERRET_VPN_MULTINET
+	XFRMA_SELECTOR_EXT_INFO,
+	XFRMA_SELECTOR_EXT_SRC,
+	XFRMA_SELECTOR_EXT_DST,
+#endif
 	__XFRMA_MAX
 
 #define XFRMA_MAX (__XFRMA_MAX - 1)
@@ -387,10 +449,21 @@ struct xfrm_userspi_info {
 	__u32				max;
 };
 
+#ifdef FERRET_VPN_MULTI_POLICY
+struct del_tmpl {
+	xfrm_address_t      saddr;
+	xfrm_address_t      daddr;
+	__u32               family;
+};
+#endif
+
 struct xfrm_userpolicy_info {
 	struct xfrm_selector		sel;
 	struct xfrm_lifetime_cfg	lft;
 	struct xfrm_lifetime_cur	curlft;
+#ifdef FERRET_VPN_MULTI_POLICY
+	struct del_tmpl		del_tmpl;
+#endif
 	__u32				priority;
 	__u32				index;
 	__u8				dir;

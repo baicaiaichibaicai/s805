@@ -688,7 +688,7 @@ static int
 printer_fsync(struct file *fd, loff_t start, loff_t end, int datasync)
 {
 	struct printer_dev	*dev = fd->private_data;
-	struct inode *inode = fd->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(fd);
 	unsigned long		flags;
 	int			tx_list_empty;
 
@@ -975,6 +975,15 @@ unknown:
 		break;
 	}
 	/* host either stalls (value < 0) or reports success */
+	if (value >= 0) {
+		req->length = value;
+		req->zero = value < wLength;
+		value = usb_ep_queue(cdev->gadget->ep0, req, GFP_ATOMIC);
+		if (value < 0) {
+			ERROR(dev, "%s:%d Error!\n", __func__, __LINE__);
+			req->status = 0;
+		}
+	}
 	return value;
 }
 

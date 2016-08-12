@@ -3,6 +3,11 @@
 #
 
 #
+# NFW Bypass Drivers
+#
+obj-$(CONFIG_FERRET_NETWORK_BYPASS) += bypass/
+
+#
 # Networking Core Drivers
 #
 obj-$(CONFIG_BONDING) += bonding/

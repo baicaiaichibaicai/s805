@@ -3,6 +3,11 @@
 
 #define PAGE_SIZE _PAGE_SIZE
 
+#ifdef PHYSADDR
+phys_entry = kernel_entry - VMLINUX_LOAD_ADDRESS + PHYSADDR;
+#define LOAD_OFFSET (VMLINUX_LOAD_ADDRESS - PHYSADDR)
+#endif
+
 /*
  * Put .bss..swapper_pg_dir as the first thing in .bss. This will
  * ensure that it has .bss alignment (64K).
@@ -14,20 +19,28 @@
 #undef mips
 #define mips mips
 OUTPUT_ARCH(mips)
+#ifdef PHYSADDR
+ENTRY(phys_entry)
+#define AT_LOCATION AT(PHYSADDR)
+#else
 ENTRY(kernel_entry)
+#define AT_LOCATION
+#endif
 PHDRS {
-	text PT_LOAD FLAGS(7);	/* RWX */
+	text PT_LOAD AT_LOCATION FLAGS(7);	/* RWX */
+#ifndef CONFIG_DISABLE_ELF_NOTE_HEADER
 	note PT_NOTE FLAGS(4);	/* R__ */
+#endif
 }
 
 #ifdef CONFIG_32BIT
 	#ifdef CONFIG_CPU_LITTLE_ENDIAN
-		jiffies  = jiffies_64;
+		jiffies	 = jiffies_64;
 	#else
-		jiffies  = jiffies_64 + 4;
+		jiffies	 = jiffies_64 + 4;
 	#endif
 #else
-	jiffies  = jiffies_64;
+	jiffies	 = jiffies_64;
 #endif
 
 SECTIONS
@@ -50,7 +63,7 @@ SECTIONS
 	. = VMLINUX_LOAD_ADDRESS;
 	/* read-only */
 	_text = .;	/* Text and read-only data */
-	.text : {
+	.text : AT_LOCATION {
 		TEXT_TEXT
 		SCHED_TEXT
 		LOCK_TEXT
@@ -70,8 +83,12 @@ SECTIONS
 		*(__dbe_table)
 		__stop___dbe_table = .;
 	}
-
-	NOTES :text :note
+#ifdef CONFIG_DISABLE_ELF_NOTE_HEADER
+#define NOTES_HEADER
+#else
+#define NOTES_HEADER :note
+#endif
+	NOTES :text NOTES_HEADER
 	.dummy : { *(.dummy) } :text
 
 	_sdata = .;			/* Start of data section */
@@ -139,7 +156,7 @@ SECTIONS
 
 	/*
 	 * Force .bss to 64K alignment so that .bss..swapper_pg_dir
-	 * gets that alignment.  .sbss should be empty, so there will be
+	 * gets that alignment.	 .sbss should be empty, so there will be
 	 * no holes after __init_end. */
 	BSS_SECTION(0, 0x10000, 0)
 
@@ -179,5 +196,6 @@ SECTIONS
 		*(.options)
 		*(.pdr)
 		*(.reginfo)
+		*(.eh_frame)
 	}
 }

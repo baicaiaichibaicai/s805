@@ -563,7 +563,7 @@ static void kfree_skbmem(struct sk_buff *skb)
 	}
 }
 
-static void skb_release_head_state(struct sk_buff *skb)
+void skb_release_head_state(struct sk_buff *skb)
 {
 	skb_dst_drop(skb);
 #ifdef CONFIG_XFRM

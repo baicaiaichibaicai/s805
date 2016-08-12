@@ -326,6 +326,8 @@ struct vb2_queue {
 	const struct vb2_mem_ops	*mem_ops;
 	void				*drv_priv;
 	unsigned int			buf_struct_size;
+	u32				timestamp_type;
+	gfp_t				gfp_flags;
 
 /* private: internal use only */
 	enum v4l2_memory		memory;
@@ -343,6 +345,7 @@ struct vb2_queue {
 	unsigned int			plane_sizes[VIDEO_MAX_PLANES];
 
 	unsigned int			streaming:1;
+	unsigned int			waiting_for_buffers:1;
 
 	struct vb2_fileio_data		*fileio;
 };

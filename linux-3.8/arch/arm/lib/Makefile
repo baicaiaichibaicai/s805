@@ -15,6 +15,11 @@ lib-y		:= backtrace.o changebit.o csumipv6.o csumpartial.o   \
 		   io-readsb.o io-writesb.o io-readsl.o io-writesl.o  \
 		   call_with_stack.o
 
+ifdef CONFIG_CORTINA_FUTURE
+		   lib-y += _raise.o
+		   lib-y += longmath.la
+endif
+
 mmu-y	:= clear_user.o copy_page.o getuser.o putuser.o
 
 # the code in uaccess.S is not preemption safe and

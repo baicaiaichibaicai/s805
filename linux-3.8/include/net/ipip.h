@@ -56,6 +56,7 @@ static inline void iptunnel_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct pcpu_tstats *tstats = this_cpu_ptr(dev->tstats);
 
 	nf_reset(skb);
+	omni_reset(skb);
 	skb->ip_summed = CHECKSUM_NONE;
 	ip_select_ident(iph, skb_dst(skb), NULL);
 

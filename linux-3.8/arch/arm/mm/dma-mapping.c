@@ -238,6 +238,41 @@ static void __dma_free_buffer(struct page *page, size_t size)
 }
 
 #ifdef CONFIG_MMU
+
+#define CONSISTENT_OFFSET(x)	(((unsigned long)(x) - consistent_base) >> PAGE_SHIFT)
+#define CONSISTENT_PTE_INDEX(x) (((unsigned long)(x) - consistent_base) >> PMD_SHIFT)
+
+/*
+ * These are the page tables (2MB each) covering uncached, DMA consistent allocations
+ */
+static pte_t **consistent_pte;
+
+/* BUG#40270-non-offload DBDC TCP downstream crashes system */
+/* call init_consistent_dma_size() when non-cacheable is enabled in cs752x_eth.c get_ni_rx_noncache() */
+#define DEFAULT_CONSISTENT_DMA_SIZE SZ_2M
+
+unsigned long consistent_base = CONSISTENT_END - DEFAULT_CONSISTENT_DMA_SIZE;
+
+void __init init_consistent_dma_size(unsigned long size)
+{
+	unsigned long base = CONSISTENT_END - ALIGN(size, SZ_2M);
+
+	BUG_ON(consistent_pte); /* Check we're called before DMA region init */
+	BUG_ON(base < VMALLOC_END);
+
+	/* Grow region to accommodate specified size  */
+	if (base < consistent_base)
+		consistent_base = base;
+}
+
+#include "vmregion.h"
+
+static struct arm_vmregion_head consistent_head = {
+	.vm_lock	= __SPIN_LOCK_UNLOCKED(&consistent_head.vm_lock),
+	.vm_list	= LIST_HEAD_INIT(consistent_head.vm_list),
+	.vm_end		= CONSISTENT_END,
+};
+
 #ifdef CONFIG_HUGETLB_PAGE
 #error ARM Coherent DMA allocator does not (yet) support huge TLB
 #endif
@@ -652,6 +687,43 @@ static void *__dma_alloc(struct device *dev, size_t size, dma_addr_t *handle,
 
 	return addr;
 }
+
+/*
+ * Allocate DMA-coherent memory space and return both the kernel remapped
+ * virtual and bus address for that space.
+ */
+void *
+dma_alloc_coherent(struct device *dev, size_t size, dma_addr_t *handle, gfp_t gfp)
+{
+	void *memory;
+
+	if (dma_alloc_from_coherent(dev, size, handle, &memory))
+		return memory;
+
+	return __dma_alloc(dev, size, handle, gfp,
+			   pgprot_dmacoherent(pgprot_kernel),
+			   0, __builtin_return_address(0));
+}
+EXPORT_SYMBOL(dma_alloc_coherent);
+
+/*
+ * free a page as defined by the above mapping.
+ * Must not be called with IRQs disabled.
+ */
+void dma_free_coherent(struct device *dev, size_t size, void *cpu_addr, dma_addr_t handle)
+{
+	WARN_ON(irqs_disabled());
+
+	if (dma_release_from_coherent(dev, get_order(size), cpu_addr))
+		return;
+
+	size = PAGE_ALIGN(size);
+
+	__dma_free_remap(cpu_addr, size);
+
+	__dma_free_buffer(pfn_to_page(dma_to_pfn(dev, handle)), size);
+}
+EXPORT_SYMBOL(dma_free_coherent);
 
 /*
  * Allocate DMA-coherent memory space and return both the kernel remapped

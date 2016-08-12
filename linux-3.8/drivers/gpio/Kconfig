@@ -30,12 +30,14 @@ config ARCH_REQUIRE_GPIOLIB
 	  Selecting this from the architecture code will cause the gpiolib
 	  code to always get built in.
 
-
+config GPIO_DEVRES
+	def_bool y
+	depends on HAS_IOMEM
 
 menuconfig GPIOLIB
 	bool "GPIO Support"
 	depends on ARCH_WANT_OPTIONAL_GPIOLIB || ARCH_REQUIRE_GPIOLIB
-	select GENERIC_GPIO
+	
 	help
 	  This enables GPIO support through the generic GPIO library.
 	  You only need to enable this, if you also want to enable
@@ -66,7 +68,7 @@ config DEBUG_GPIO
 
 config GPIO_SYSFS
 	bool "/sys/class/gpio/... (sysfs interface)"
-	depends on SYSFS && EXPERIMENTAL
+	depends on SYSFS
 	help
 	  Say Y here to add a sysfs interface for GPIOs.
 
@@ -187,6 +189,14 @@ config GPIO_MXS
 	depends on ARCH_MXS
 	select GPIO_GENERIC
 	select GENERIC_IRQ_CHIP
+
+config GPIO_OCTEON
+	tristate "Cavium OCTEON GPIO"
+	depends on GPIOLIB && OCTEON_FUTURE_BOARD
+	default y
+	help
+	  Say yes here to support the on-chip GPIO lines on the OCTEON
+	  family of SOCs.
 
 config GPIO_PL061
 	bool "PrimeCell PL061 GPIO support"
@@ -646,6 +656,12 @@ config GPIO_UCB1400
 	help
 	  This enables support for the Philips UCB1400 GPIO pins.
 	  The UCB1400 is an AC97 audio codec.
+
+config GPIO_CS75XX
+	bool "Cortina CS75XX GPIO"
+	depends on ARCH_GOLDENGATE
+	help
+	  Say Y here to support Cortina CS75XX GPIO.
 
 comment "MODULbus GPIO expanders:"
 

@@ -114,6 +114,10 @@ struct ad_info {
 	__u8 partner_system[ETH_ALEN];
 };
 
+#ifdef CONFIG_FERRET
+extern void show_bonding_info(void);
+#endif
+
 #endif /* _LINUX_IF_BONDING_H */
 
 /*

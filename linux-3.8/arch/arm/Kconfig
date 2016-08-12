@@ -4,6 +4,8 @@ config ARM
 	select ARCH_BINFMT_ELF_RANDOMIZE_PIE
 	select ARCH_HAS_ATOMIC64_DEC_IF_POSITIVE
 	select ARCH_HAVE_CUSTOM_GPIO_H
+	select ARCH_SUPPORTS_ATOMIC_RMW
+	select ARCH_HAS_TICK_BROADCAST if GENERIC_CLOCKEVENTS_BROADCAST
 	select ARCH_WANT_IPC_PARSE_VERSION
 	select BUILDTIME_EXTABLE_SORT if MMU
 	select CPU_PM if (SUSPEND || CPU_IDLE)
@@ -14,6 +16,7 @@ config ARM
 	select GENERIC_IRQ_SHOW
 	select GENERIC_PCI_IOMAP
 	select GENERIC_SMP_IDLE_THREAD
+	select GENERIC_IDLE_POLL_SETUP
 	select GENERIC_STRNCPY_FROM_USER
 	select GENERIC_STRNLEN_USER
 	select HARDIRQS_SW_RESEND
@@ -74,6 +77,27 @@ config ARM_DMA_USE_IOMMU
 	bool
 	select ARM_HAS_SG_CHAIN
 	select NEED_SG_DMA_LENGTH
+
+if ARM_DMA_USE_IOMMU
+
+config ARM_DMA_IOMMU_ALIGNMENT
+	int "Maximum PAGE_SIZE order of alignment for DMA IOMMU buffers"
+	range 4 9
+	default 8
+	help
+	  DMA mapping framework by default aligns all buffers to the smallest
+	  PAGE_SIZE order which is greater than or equal to the requested buffer
+	  size. This works well for buffers up to a few hundreds kilobytes, but
+	  for larger buffers it just a waste of address space. Drivers which has
+	  relatively small addressing window (like 64Mib) might run out of
+	  virtual space with just a few allocations.
+
+	  With this parameter you can specify the maximum PAGE_SIZE order for
+	  DMA IOMMU buffers. Larger buffers will be aligned only to this
+	  specified order. The order is expressed as a power of two multiplied
+	  by the PAGE_SIZE.
+
+endif
 
 config HAVE_PWM
 	bool
@@ -389,6 +413,23 @@ config ARCH_GEMINI
 	select CPU_FA526
 	help
 	  Support for the Cortina Systems Gemini family SoCs
+
+config ARCH_GOLDENGATE
+	bool "Cortina-systems Golden-Gate Platform"
+	select GENERIC_TIME
+	select CLKDEV_LOOKUP
+	select ARM_AMBA
+	select COMMON_CLKDEV
+	select GENERIC_CLOCKEVENTS
+	select ARCH_WANT_OPTIONAL_GPIOLIB
+	select MULTI_IRQ_HANDLER
+	select HAVE_SMP
+	select MIGHT_HAVE_CACHE_L2X0
+	select MIGHT_HAVE_PCI
+	help
+		This enables support for Cortina-Systems Golden-Gate platform.
+		ARM core: Cortex-A9-r2p7
+		L2 Cache : PL310-r3p1
 
 config ARCH_SIRF
 	bool "CSR SiRF"
@@ -1055,6 +1096,8 @@ source "arch/arm/mach-footbridge/Kconfig"
 
 source "arch/arm/mach-gemini/Kconfig"
 
+source "arch/arm/mach-goldengate/Kconfig"
+
 source "arch/arm/mach-h720x/Kconfig"
 
 source "arch/arm/mach-highbank/Kconfig"
@@ -1142,6 +1185,7 @@ source "arch/arm/mach-u300/Kconfig"
 source "arch/arm/mach-ux500/Kconfig"
 
 source "arch/arm/mach-versatile/Kconfig"
+source "arch/arm/mach-virt/Kconfig"
 
 source "arch/arm/mach-vexpress/Kconfig"
 source "arch/arm/plat-versatile/Kconfig"
@@ -1435,6 +1479,30 @@ config PL310_ERRATA_769419
 	  This option adds a write barrier to the cpu_idle loop so that,
 	  on systems with an outer cache, the store buffer is drained
 	  explicitly.
+
+# added by whsu 03/02/2012
+config ARM_ERRATA_761320
+	bool "ARM ACP errata: ACP request possibly lead to deadlock"
+	depends on CPU_V7 && SMP
+	help
+	  Full cache line writes from 2 processors or more may interfere
+	  with ACP requests, possibly leading to deadlock.
+	  Under very rare circumstances, some ACP requests in hazard with
+	  full cache line writes from (at least) 2 processors may cause
+	  arbitration issues in the SCU, leading to processor deadlock.
+
+# added by jason 04/12/2012
+config PL310_ERRATA_780370
+	bool "PL310 errata: Data corrupt due to parity errors were incorrectly sampled by the eviction buffer"
+	depends on CACHE_PL310
+	help
+	  The PL310 L2 cache controller implements error logic to indicate
+	  errors have occurred when accessing the L2 cache RAM array.
+	  When an eviction is handled by the PL310 eviction buffer, both Tag
+	  and Data RAMs are accessed to get the whole eviction information.
+	  Due to this erratum, the eviction buffer can incorrectly sample
+	  error information. As a result, an eviction can be wrongly cancelled
+	  and dirty data can be lost, leading to data corruption.
 
 config ARM_ERRATA_775420
        bool "ARM errata: A data cache maintenance operation which aborts, might lead to deadlock"
@@ -1884,6 +1952,15 @@ config XEN
 	help
 	  Say Y if you want to run Linux in a Virtual Machine on Xen on ARM.
 
+config ARM_FLUSH_CONSOLE_ON_RESTART
+	bool "Force flush the console on restart"
+	help
+	  If the console is locked while the system is rebooted, the messages
+	  in the temporary logbuffer would not have propogated to all the
+	  console drivers. This option forces the console lock to be
+	  released if it failed to be acquired, which will cause all the
+	  pending messages to be flushed.
+
 endmenu
 
 menu "Boot options"
@@ -1912,6 +1989,21 @@ config DEPRECATED_PARAM_STRUCT
 	help
 	  This was deprecated in 2001 and announced to live on for 5 years.
 	  Some old boot loaders still use this way.
+
+config BUILD_ARM_APPENDED_DTB_IMAGE
+	bool "Build a concatenated zImage/dtb by default"
+	depends on OF
+	help
+	  Enabling this option will cause a concatenated zImage and list of
+	  DTBs to be built by default (instead of a standalone zImage.)
+	  The image will built in arch/arm/boot/zImage-dtb
+
+config BUILD_ARM_APPENDED_DTB_IMAGE_NAMES
+	string "Default dtb names"
+	depends on BUILD_ARM_APPENDED_DTB_IMAGE
+	help
+	  Space separated list of names of dtbs to append when
+	  building a concatenated zImage-dtb.
 
 # Compressed boot loader in ROM.  Yes, we really want to ask about
 # TEXT and BSS so we preserve their values in the config files.

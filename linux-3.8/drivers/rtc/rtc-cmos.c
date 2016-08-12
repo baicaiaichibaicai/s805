@@ -184,7 +184,11 @@ static inline void cmos_write_bank2(unsigned char val, unsigned char addr)
 
 /*----------------------------------------------------------------*/
 
+#ifdef CONFIG_MZEN
+int cmos_read_time(struct device *dev, struct rtc_time *t)
+#else
 static int cmos_read_time(struct device *dev, struct rtc_time *t)
+#endif
 {
 	/* REVISIT:  if the clock has a "century" register, use
 	 * that instead of the heuristic in get_rtc_time().
@@ -193,8 +197,15 @@ static int cmos_read_time(struct device *dev, struct rtc_time *t)
 	get_rtc_time(t);
 	return 0;
 }
+#ifdef CONFIG_MZEN
+EXPORT_SYMBOL(cmos_read_time);
+#endif
 
+#ifdef CONFIG_MZEN
+int cmos_set_time(struct device *dev, struct rtc_time *t)
+#else
 static int cmos_set_time(struct device *dev, struct rtc_time *t)
+#endif
 {
 	/* REVISIT:  set the "century" register if available
 	 *
@@ -204,6 +215,9 @@ static int cmos_set_time(struct device *dev, struct rtc_time *t)
 	 */
 	return set_rtc_time(t);
 }
+#ifdef CONFIG_MZEN
+EXPORT_SYMBOL(cmos_set_time);
+#endif
 
 static int cmos_read_alarm(struct device *dev, struct rtc_wkalrm *t)
 {

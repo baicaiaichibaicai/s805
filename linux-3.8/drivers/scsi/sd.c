@@ -63,6 +63,9 @@
 #include <scsi/scsi_host.h>
 #include <scsi/scsi_ioctl.h>
 #include <scsi/scsicam.h>
+#ifdef CONFIG_FERRET
+#include <future/general.h>
+#endif
 
 #include "sd.h"
 #include "scsi_priv.h"
@@ -2840,6 +2843,7 @@ static void sd_probe_async(void *data, async_cookie_t cookie)
 		  sdp->removable ? "removable " : "");
 	scsi_autopm_put_device(sdp);
 	put_device(&sdkp->dev);
+
 }
 
 /**

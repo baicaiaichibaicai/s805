@@ -101,6 +101,9 @@ struct nf_conn {
 
 	/* Extensions */
 	struct nf_ct_ext *ext;
+#if defined(CONFIG_OMNI_NF) || defined(CONFIG_OMNI_NF_MODULE)
+	struct omni_track_ext *omni_ext;
+#endif /*OMNI_NF*/
 #ifdef CONFIG_NET_NS
 	struct net *ct_net;
 #endif

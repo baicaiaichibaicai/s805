@@ -49,6 +49,18 @@ static int pgsize;
 static int bufsize;
 static int ebcnt;
 static int pgcnt;
+static unsigned long next = 1;
+
+static inline unsigned int simple_rand(void)
+{
+	next = next * 1103515245 + 12345;
+	return (unsigned int)((next / 65536) % 32768);
+}
+
+static inline void simple_srand(unsigned long seed)
+{
+	next = seed;
+}
 
 static int rand_eb(void)
 {

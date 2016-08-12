@@ -25,10 +25,62 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+#include <linux/clk.h>
+#include "8250.h"
+/* Offsets for the DesignWare specific registers */
+#define DW_UART_USR 0x1f /* UART Status Register */
+#define DW_UART_CPR 0xf4 /* Component Parameter Register */
+#define DW_UART_UCV 0xf8 /* UART Component Version */
+
+/* Component Parameter Register bits */
+#define DW_UART_CPR_ABP_DATA_WIDTH  (3 << 0)
+#define DW_UART_CPR_AFCE_MODE       (1 << 4)
+#define DW_UART_CPR_THRE_MODE       (1 << 5)
+#define DW_UART_CPR_SIR_MODE        (1 << 6)
+#define DW_UART_CPR_SIR_LP_MODE     (1 << 7)
+#define DW_UART_CPR_ADDITIONAL_FEATURES (1 << 8)
+#define DW_UART_CPR_FIFO_ACCESS     (1 << 9)
+#define DW_UART_CPR_FIFO_STAT       (1 << 10)
+#define DW_UART_CPR_SHADOW      (1 << 11)
+#define DW_UART_CPR_ENCODED_PARMS   (1 << 12)
+#define DW_UART_CPR_DMA_EXTRA       (1 << 13)
+#define DW_UART_CPR_FIFO_MODE       (0xff << 16)
+/* Helper for fifo size calculation */
+#define DW_UART_CPR_FIFO_SIZE(a)    (((a >> 16) & 0xff) * 16)
+#endif
+
 struct dw8250_data {
 	int	last_lcr;
 	int	line;
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+	struct clk	*clk;
+	u8			usr_reg;
+	bool		no_ucv;
+#endif
 };
+
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+static unsigned int dw8250_serial_inq(struct uart_port *p, int offset)
+{
+	offset <<= p->regshift;
+
+	return (u8)__raw_readq(p->membase + offset);
+}
+
+static void dw8250_serial_outq(struct uart_port *p, int offset, int value)
+{
+	struct dw8250_data *d = p->private_data;
+
+	if (offset == UART_LCR)
+		d->last_lcr = value;
+
+	offset <<= p->regshift;
+	value &= 0xff;
+	__raw_writeq(value, p->membase + offset);
+	dw8250_serial_inq(p, UART_LCR);
+}
+#endif
 
 static void dw8250_serial_out(struct uart_port *p, int offset, int value)
 {
@@ -78,7 +130,11 @@ static int dw8250_handle_irq(struct uart_port *p)
 		return 1;
 	} else if ((iir & UART_IIR_BUSY) == UART_IIR_BUSY) {
 		/* Clear the USR and write the LCR again. */
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+		(void)p->serial_in(p, d->usr_reg);
+#else
 		(void)p->serial_in(p, UART_USR);
+#endif
 		p->serial_out(p, UART_LCR, d->last_lcr);
 
 		return 1;
@@ -87,6 +143,84 @@ static int dw8250_handle_irq(struct uart_port *p)
 	return 0;
 }
 
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+static int dw8250_probe_of(struct uart_port *p,
+			   struct dw8250_data *data)
+{
+	struct device_node	*np = p->dev->of_node;
+	u32			val;
+
+	if (of_device_is_compatible(np, "cavium,octeon-3860-uart")) {
+		p->serial_in = dw8250_serial_inq;
+		p->serial_out = dw8250_serial_outq;
+		p->flags = ASYNC_SKIP_TEST | UPF_SHARE_IRQ | UPF_FIXED_TYPE;
+		p->type = PORT_OCTEON;
+		data->usr_reg = 0x27;
+		data->no_ucv = true;
+	} else if (!of_property_read_u32(np, "reg-io-width", &val)) {
+		switch (val) {
+		case 1:
+			break;
+		case 4:
+			p->iotype = UPIO_MEM32;
+			p->serial_in = dw8250_serial_in32;
+			p->serial_out = dw8250_serial_out32;
+			break;
+		default:
+			dev_err(p->dev, "unsupported reg-io-width (%u)\n", val);
+			return -EINVAL;
+		}
+	}
+
+	if (!of_property_read_u32(np, "reg-shift", &val))
+		p->regshift = val;
+
+	/* clock got configured through clk api, all done */
+	if (p->uartclk)
+		return 0;
+
+	/* try to find out clock frequency from DT as fallback */
+	if (of_property_read_u32(np, "clock-frequency", &val)) {
+		dev_err(p->dev, "clk or clock-frequency not defined\n");
+		return -EINVAL;
+	}
+	p->uartclk = val;
+
+	return 0;
+}
+
+static void dw8250_setup_port(struct uart_8250_port *up)
+{
+	struct uart_port	*p = &up->port;
+	u32			reg = readl(p->membase + DW_UART_UCV);
+
+	/*
+	 * If the Component Version Register returns zero, we know that
+	 * ADDITIONAL_FEATURES are not enabled. No need to go any further.
+	 */
+	if (!reg)
+		return;
+
+	dev_dbg_ratelimited(p->dev, "Designware UART version %c.%c%c\n",
+		(reg >> 24) & 0xff, (reg >> 16) & 0xff, (reg >> 8) & 0xff);
+
+	reg = readl(p->membase + DW_UART_CPR);
+	if (!reg)
+		return;
+
+	/* Select the type based on fifo */
+	if (reg & DW_UART_CPR_FIFO_MODE) {
+		p->type = PORT_16550A;
+		p->flags |= UPF_FIXED_TYPE;
+		p->fifosize = DW_UART_CPR_FIFO_SIZE(reg);
+		up->tx_loadsz = p->fifosize;
+		up->capabilities = UART_CAP_FIFO;
+	}
+
+	if (reg & DW_UART_CPR_AFCE_MODE)
+		up->capabilities |= UART_CAP_AFE;
+}
+#endif
 static int dw8250_probe(struct platform_device *pdev)
 {
 	struct uart_8250_port uart = {};
@@ -95,16 +229,19 @@ static int dw8250_probe(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	u32 val;
 	struct dw8250_data *data;
+	int err;
 
 	if (!regs || !irq) {
 		dev_err(&pdev->dev, "no registers/irq defined\n");
 		return -EINVAL;
 	}
 
+#ifndef CONFIG_OCTEON_FUTURE_BOARD
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 	uart.port.private_data = data;
+#endif
 
 	spin_lock_init(&uart.port.lock);
 	uart.port.mapbase = regs->start;
@@ -115,9 +252,42 @@ static int dw8250_probe(struct platform_device *pdev)
 		UPF_FIXED_PORT | UPF_FIXED_TYPE;
 	uart.port.dev = &pdev->dev;
 
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+	uart.port.membase = devm_ioremap(&pdev->dev, regs->start,
+					 resource_size(regs));
+	if (!uart.port.membase)
+		return -ENOMEM;
+
+	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	data->usr_reg = DW_UART_USR;
+	data->clk = devm_clk_get(&pdev->dev, NULL);
+	if (!IS_ERR(data->clk)) {
+		clk_prepare_enable(data->clk);
+		uart.port.uartclk = clk_get_rate(data->clk);
+	}
+#endif
+
 	uart.port.iotype = UPIO_MEM;
 	uart.port.serial_in = dw8250_serial_in;
 	uart.port.serial_out = dw8250_serial_out;
+
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+	uart.port.private_data = data;
+
+	if (pdev->dev.of_node) {
+		err = dw8250_probe_of(&uart.port, data);
+		if (err)
+			return err;
+	} else {
+		return -ENODEV;
+	}
+
+	if (!data->no_ucv)
+		dw8250_setup_port(&uart);
+#else
 	if (!of_property_read_u32(np, "reg-io-width", &val)) {
 		switch (val) {
 		case 1:
@@ -142,6 +312,7 @@ static int dw8250_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 	uart.port.uartclk = val;
+#endif
 
 	data->line = serial8250_register_8250_port(&uart);
 	if (data->line < 0)
@@ -186,6 +357,9 @@ static int dw8250_resume(struct platform_device *pdev)
 
 static const struct of_device_id dw8250_match[] = {
 	{ .compatible = "snps,dw-apb-uart" },
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+	{ .compatible = "cavium,octeon-3860-uart" },
+#endif
 	{ /* Sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, dw8250_match);

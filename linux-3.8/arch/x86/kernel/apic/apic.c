@@ -55,8 +55,6 @@
 #include <asm/tsc.h>
 #include <asm/hypervisor.h>
 
-unsigned int num_processors;
-
 unsigned disabled_cpus __cpuinitdata;
 
 /* Processor that is doing the boot up */

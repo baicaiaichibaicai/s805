@@ -26,6 +26,8 @@
 #include <linux/ioport.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
+#include <linux/irqchip.h>
+
 #include <linux/random.h>
 #include <linux/smp.h>
 #include <linux/init.h>
@@ -55,6 +57,27 @@ int arch_show_interrupts(struct seq_file *p, int prec)
 	return 0;
 }
 
+#ifdef CONFIG_DEBUG_STACKOVERFLOW
+/* Debugging check for stack overflow: is there less than 1KB free? */
+static int check_stack_overflow(void)
+{
+#define STACK_WARN 1024
+	register unsigned long current_sp asm ("sp");
+
+	return (current_sp & (THREAD_SIZE-1)) < (sizeof(struct thread_info) + STACK_WARN);
+}
+
+static void print_stack_overflow(void)
+{
+	printk(KERN_WARNING "low stack detected by irq handler\n");
+	BUG();
+	dump_stack();
+}
+#else
+static inline int check_stack_overflow(void) { return 0; }
+static inline void print_stack_overflow(void) { }
+#endif
+
 /*
  * handle_IRQ handles all hardware IRQ's.  Decoded IRQs should
  * not come via this function.  Instead, they should provide their
@@ -64,6 +87,12 @@ int arch_show_interrupts(struct seq_file *p, int prec)
 void handle_IRQ(unsigned int irq, struct pt_regs *regs)
 {
 	struct pt_regs *old_regs = set_irq_regs(regs);
+	int overflow;
+
+	overflow = check_stack_overflow();
+
+	if (unlikely(overflow))
+		print_stack_overflow();
 
 	irq_enter();
 
@@ -114,8 +143,29 @@ EXPORT_SYMBOL_GPL(set_irq_flags);
 
 void __init init_IRQ(void)
 {
+	if (IS_ENABLED(CONFIG_OF) && !machine_desc->init_irq)
+		irqchip_init();
+	else
+		machine_desc->init_irq();
+}
+
+#ifdef CONFIG_MULTI_IRQ_HANDLER
+void __init set_handle_irq(void (*handle_irq)(struct pt_regs *))
+{
+	if (handle_arch_irq)
+		return;
+
+	handle_arch_irq = handle_irq;
+}
+#endif
+
+
+/*
+void __init init_IRQ(void)
+{
 	machine_desc->init_irq();
 }
+*/
 
 #ifdef CONFIG_SPARSE_IRQ
 int __init arch_probe_nr_irqs(void)
@@ -124,6 +174,7 @@ int __init arch_probe_nr_irqs(void)
 	return nr_irqs;
 }
 #endif
+
 
 #ifdef CONFIG_HOTPLUG_CPU
 
@@ -149,7 +200,7 @@ static bool migrate_one_irq(struct irq_desc *desc)
 	c = irq_data_get_irq_chip(d);
 	if (!c->irq_set_affinity)
 		pr_debug("IRQ%u: unable to set affinity\n", d->irq);
-	else if (c->irq_set_affinity(d, affinity, true) == IRQ_SET_MASK_OK && ret)
+	else if (c->irq_set_affinity(d, affinity, false) == IRQ_SET_MASK_OK && ret)
 		cpumask_copy(d->affinity, affinity);
 
 	return ret;

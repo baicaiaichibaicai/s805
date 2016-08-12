@@ -332,4 +332,9 @@ extern int clocksource_mmio_init(void __iomem *, const char *,
 
 extern int clocksource_i8253_init(void);
 
+#ifdef CONFIG_CLKSRC_OF
+extern void clocksource_of_init(void);
+#else
+static inline void clocksource_of_init(void) {}
+#endif
 #endif /* _LINUX_CLOCKSOURCE_H */

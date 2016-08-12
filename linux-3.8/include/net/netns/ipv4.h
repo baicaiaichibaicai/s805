@@ -53,6 +53,12 @@ struct netns_ipv4 {
 #endif
 	struct xt_table		*nat_table;
 #endif
+#ifdef CONFIG_OMNI_NF
+	struct omni_xt_table	*omni_iptable_nat;
+	struct omni_xt_table	*omni_iptable_filter;
+	struct omni_xt_table	*omni_iptable_mangle;
+	struct omni_xt_table	*omni_macfilter_filter;
+#endif //CONFIG_OMNI_NF
 
 	int sysctl_icmp_echo_ignore_all;
 	int sysctl_icmp_echo_ignore_broadcasts;

@@ -176,10 +176,34 @@ typedef struct {
 	int counter;
 } atomic_t;
 
+
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+#ifdef CONFIG_PAX_REFCOUNT
+typedef struct {
+	int counter;
+} atomic_unchecked_t;
+#else
+typedef atomic_t atomic_unchecked_t;
+#endif
+#endif
 #ifdef CONFIG_64BIT
 typedef struct {
 	long counter;
 } atomic64_t;
+
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+#ifdef CONFIG_PAX_REFCOUNT
+typedef struct {
+	long counter;
+} atomic64_unchecked_t;
+#else
+typedef atomic64_t atomic64_unchecked_t;
+#endif
+#endif
 #endif
 
 struct list_head {

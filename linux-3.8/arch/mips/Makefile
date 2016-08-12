@@ -90,8 +90,11 @@ all-$(CONFIG_SYS_SUPPORTS_ZBOOT)+= vmlinuz
 cflags-y			+= -G 0 -mno-abicalls -fno-pic -pipe
 cflags-y			+= -msoft-float
 LDFLAGS_vmlinux			+= -G 0 -static -n -nostdlib
+
+ifndef CONFIG_MAPPED_KERNEL
 KBUILD_AFLAGS_MODULE		+= -mlong-calls
 KBUILD_CFLAGS_MODULE		+= -mlong-calls
+endif
 
 cflags-y += -ffreestanding
 
@@ -114,6 +117,7 @@ cflags-$(CONFIG_CPU_BIG_ENDIAN)		+= $(shell $(CC) -dumpmachine |grep -q 'mips.*e
 cflags-$(CONFIG_CPU_LITTLE_ENDIAN)	+= $(shell $(CC) -dumpmachine |grep -q 'mips.*el-.*' || echo -EL $(undef-all) $(predef-le))
 
 cflags-$(CONFIG_CPU_HAS_SMARTMIPS)	+= $(call cc-option,-msmartmips)
+cflags-$(CONFIG_CPU_MICROMIPS) += $(call cc-option,-mmicromips -mno-jals)
 
 cflags-$(CONFIG_SB1XXX_CORELIS)	+= $(call cc-option,-mno-sched-prolog) \
 				   -fno-omit-frame-pointer
@@ -150,11 +154,41 @@ cflags-$(CONFIG_CPU_SB1)	+= $(call cc-option,-march=sb1,-march=r5000) \
 cflags-$(CONFIG_CPU_R8000)	+= -march=r8000 -Wa,--trap
 cflags-$(CONFIG_CPU_R10000)	+= $(call cc-option,-march=r10000,-march=r8000) \
 			-Wa,--trap
-cflags-$(CONFIG_CPU_CAVIUM_OCTEON) += $(call cc-option,-march=octeon) -Wa,--trap
-ifeq (,$(findstring march=octeon, $(cflags-$(CONFIG_CPU_CAVIUM_OCTEON))))
-cflags-$(CONFIG_CPU_CAVIUM_OCTEON) += -Wa,-march=octeon
+
+ifdef CONFIG_CPU_CAVIUM_OCTEON
+ifdef CONFIG_CAVIUM_OCTEON2
+cflags-y += $(call cc-option,-march=octeon2) -Wa,--trap
+ifeq (,$(findstring march=octeon2, $(cflags-y)))
+cflags-y += -Wa,-march=octeon2
 endif
+else
+cflags-y += $(call cc-option,-march=octeon) -Wa,--trap
+ifeq (,$(findstring march=octeon, $(cflags-y)))
+cflags-y += -Wa,-march=octeon
+endif
+endif
+endif
+
+cflags-$(CONFIG_CPU_CAVIUM_OCTEON) += -DCVMX_BUILD_FOR_LINUX_KERNEL=1 -DUSE_RUNTIME_MODEL_CHECKS=1
+
 cflags-$(CONFIG_CAVIUM_CN63XXP1) += -Wa,-mfix-cn63xxp1
+
+ifdef  CONFIG_CAVIUM_OCTEON_CHK_CVMX_PARAMETER
+cflags-y += -DCVMX_ENABLE_PARAMETER_CHECKING=1
+else
+cflags-y += -DCVMX_ENABLE_PARAMETER_CHECKING=0
+endif
+ifdef  CONFIG_CAVIUM_OCTEON_CHK_CVMX_ADDRESS
+cflags-y += -DCVMX_ENABLE_CSR_ADDRESS_CHECKING=1
+else
+cflags-y += -DCVMX_ENABLE_CSR_ADDRESS_CHECKING=0
+endif
+ifdef  CONFIG_CAVIUM_OCTEON_CHK_CVMX_POW
+cflags-y += -DCVMX_ENABLE_POW_CHECKS=1
+else
+cflags-y += -DCVMX_ENABLE_POW_CHECKS=0
+endif
+
 cflags-$(CONFIG_CPU_BMIPS)	+= -march=mips32 -Wa,-mips32 -Wa,--trap
 
 cflags-$(CONFIG_CPU_R4000_WORKAROUNDS)	+= $(call cc-option,-mfix-r4000,)
@@ -191,7 +225,7 @@ endif
 include $(srctree)/arch/mips/Kbuild.platforms
 
 ifdef CONFIG_PHYSICAL_START
-load-y                                  = $(CONFIG_PHYSICAL_START)
+load-y					= $(CONFIG_PHYSICAL_START)
 endif
 
 cflags-y			+= -I$(srctree)/arch/mips/include/asm/mach-generic

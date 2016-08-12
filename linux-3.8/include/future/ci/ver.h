@@ -1,0 +1,1 @@
+#define	N3CRYPTO_CORE_VERS				"1.01"

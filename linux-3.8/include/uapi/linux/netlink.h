@@ -26,8 +26,12 @@
 #define NETLINK_ECRYPTFS	19
 #define NETLINK_RDMA		20
 #define NETLINK_CRYPTO		21	/* Crypto layer */
+#define NETLINK_FLOGS		22	/* for flogs */
+#define NETLINK_QOS_MONITOR		23		/* QoS Monitor */
 
 #define NETLINK_INET_DIAG	NETLINK_SOCK_DIAG
+#define NETLINK_INSPECT		31		/* SSL inspection */
+
 
 #define MAX_LINKS 32		
 

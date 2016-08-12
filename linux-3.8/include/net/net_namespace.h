@@ -104,6 +104,9 @@ struct net {
 	struct sock		*nfnl;
 	struct sock		*nfnl_stash;
 #endif
+#if defined(CONFIG_OMNI_NF) || defined(CONFIG_OMNI_NF_MODULE)
+	struct netns_xt		omni_xt;
+#endif //CONFIG_OMNI_NF
 #ifdef CONFIG_WEXT_CORE
 	struct sk_buff_head	wext_nlevents;
 #endif

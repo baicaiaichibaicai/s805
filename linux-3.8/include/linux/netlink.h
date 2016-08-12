@@ -103,6 +103,8 @@ struct netlink_callback {
 	u16			min_dump_alloc;
 	unsigned int		prev_seq, seq;
 	long			args[6];
+//	/* 0 = boottime, 1 = monotonic_boottime, 2 = jiffies */
+	unsigned long track_create_info[3];
 };
 
 struct netlink_notify {
@@ -134,5 +136,7 @@ static inline int netlink_dump_start(struct sock *ssk, struct sk_buff *skb,
 
 	return __netlink_dump_start(ssk, skb, nlh, control);
 }
+
+extern void get_track_create_info(unsigned long args[3]);
 
 #endif	/* __LINUX_NETLINK_H */

@@ -398,6 +398,14 @@ extern int panic_on_unrecovered_nmi;
 extern int panic_on_io_nmi;
 extern int sysctl_panic_on_stackoverflow;
 extern const char *print_tainted(void);
+//Modifed odorid
+#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+enum lockdep_ok {
+	LOCKDEP_STILL_OK,
+	LOCKDEP_NOW_UNRELIABLE
+}; 
+#endif
 extern void add_taint(unsigned flag);
 extern int test_taint(unsigned flag);
 extern unsigned long get_taint(void);

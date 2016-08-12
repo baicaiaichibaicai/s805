@@ -447,6 +447,10 @@ static int pppoe_rcv(struct sk_buff *skb, struct net_device *dev,
 	if (!po)
 		goto drop;
 
+#ifdef CONFIG_FERRET
+	if (dev) dev->last_rcv_jiff = jiffies;
+#endif
+
 	return sk_receive_skb(sk_pppox(po), skb, 0);
 
 drop:

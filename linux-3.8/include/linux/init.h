@@ -93,6 +93,13 @@
 
 #define __exit          __section(.exit.text) __exitused __cold notrace
 
+#define __devinit        
+#define __devinitdata    
+#define __devinitconst   
+#define __devexit        
+#define __devexitdata    
+#define __devexitconst   
+#define __devexit_p(x)	(x)
 /* Used for HOTPLUG_CPU */
 #define __cpuinit        __section(.cpuinit.text) __cold notrace
 #define __cpuinitdata    __section(.cpuinit.data)

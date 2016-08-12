@@ -1159,10 +1159,18 @@ void usb_disable_device(struct usb_device *dev, int skip_ep0)
 			interface = dev->actconfig->interface[i];
 			if (!device_is_registered(&interface->dev))
 				continue;
+
+#ifdef CONFIG_FERRET
+			if ((dev->descriptor.idVendor != 0x1fc9) && (dev->descriptor.idProduct != 0x1000))
+				dev_dbg(&dev->dev, "unregistering interface %s\n",
+						dev_name(&interface->dev));
+#else
 			dev_dbg(&dev->dev, "unregistering interface %s\n",
-				dev_name(&interface->dev));
+					dev_name(&interface->dev));
+#endif
 			remove_intf_ep_devs(interface);
 			device_del(&interface->dev);
+
 		}
 
 		/* Now that the interfaces are unbound, nobody should
@@ -1179,8 +1187,15 @@ void usb_disable_device(struct usb_device *dev, int skip_ep0)
 			usb_set_device_state(dev, USB_STATE_ADDRESS);
 	}
 
+#ifdef CONFIG_FERRET
+	if ((dev->descriptor.idVendor != 0x1fc9) && (dev->descriptor.idProduct != 0x1000))
 	dev_dbg(&dev->dev, "%s nuking %s URBs\n", __func__,
 		skip_ep0 ? "non-ep0" : "all");
+#else
+	 dev_dbg(&dev->dev, "%s nuking %s URBs\n", __func__,
+	       skip_ep0 ? "non-ep0" : "all");
+#endif
+
 	if (hcd->driver->check_bandwidth) {
 		/* First pass: Cancel URBs, leave endpoint pointers intact. */
 		for (i = skip_ep0; i < 16; ++i) {

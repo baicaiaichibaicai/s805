@@ -45,9 +45,12 @@ void (*flush_cache_sigtramp)(unsigned long addr);
 void (*local_flush_data_cache_page)(void * addr);
 void (*flush_data_cache_page)(unsigned long addr);
 void (*flush_icache_all)(void);
+void (*local_flush_icache_all)(void);
+EXPORT_SYMBOL(local_flush_icache_all);
 
 EXPORT_SYMBOL_GPL(local_flush_data_cache_page);
 EXPORT_SYMBOL(flush_data_cache_page);
+EXPORT_SYMBOL(flush_icache_all);
 
 #ifdef CONFIG_DMA_NONCOHERENT
 
@@ -214,7 +217,8 @@ void __cpuinit cpu_cache_init(void)
 
 		octeon_cache_init();
 	}
-
+	if (!local_flush_icache_all)
+		local_flush_icache_all = flush_icache_all;
 	setup_protection_map();
 }
 

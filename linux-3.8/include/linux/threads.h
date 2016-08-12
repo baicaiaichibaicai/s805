@@ -19,6 +19,10 @@
 /* Places which use this should consider cpumask_var_t. */
 #define NR_CPUS		CONFIG_NR_CPUS
 
+#ifdef CONFIG_FERRET
+#define NR_ETH		40
+#endif
+
 #define MIN_THREADS_LEFT_FOR_ROOT 4
 
 /*

@@ -132,6 +132,9 @@ enum {
 	RTM_GETMDB = 86,
 #define RTM_GETMDB RTM_GETMDB
 
+	RTM_SETHA = 91,
+#define RTM_SETHA RTM_SETHA
+
 	__RTM_MAX,
 #define RTM_MAX		(((__RTM_MAX + 3) & ~3) - 1)
 };
@@ -165,8 +168,13 @@ struct rtattr {
 #define RTA_DATA(rta)   ((void*)(((char*)(rta)) + RTA_LENGTH(0)))
 #define RTA_PAYLOAD(rta) ((int)((rta)->rta_len) - RTA_LENGTH(0))
 
-
-
+/******************************************************************************
+ *      HA Information
+ ****/
+struct hamsg {
+	unsigned char       ha_state;
+	char    reserved[7];
+};
 
 /******************************************************************************
  *		Definitions used in routing table administration.
@@ -185,6 +193,15 @@ struct rtmsg {
 
 	unsigned		rtm_flags;
 };
+
+#ifdef CONFIG_FERRET
+struct rtmsg_ext
+{
+	unsigned short		rtm_distance;
+	unsigned short		rtm_route_proto;
+	int					rtm_uptime;
+};
+#endif
 
 /* rtm_type */
 
@@ -208,6 +225,19 @@ enum {
 
 #define RTN_MAX (__RTN_MAX - 1)
 
+
+#ifdef CONFIG_FERRET
+/* zebra route types */
+#define ZEBRA_ROUTE_SYSTEM		0
+#define ZEBRA_ROUTE_KERNEL		1
+#define ZEBRA_ROUTE_CONNECT		2
+#define ZEBRA_ROUTE_STATIC		3
+#define ZEBRA_ROUTE_RIP			4
+#define ZEBRA_ROUTE_RIPNG		5
+#define ZEBRA_ROUTE_OSPF		6
+#define ZEBRA_ROUTE_OSPF6		7
+#define ZEBRA_ROUTE_BGP			8
+#endif
 
 /* rtm_protocol */
 
@@ -297,6 +327,9 @@ enum rtattr_type_t {
 	RTA_TABLE,
 	RTA_MARK,
 	RTA_MFC_STATS,
+#ifdef CONFIG_FERRET
+	RTA_DYNAMIC_INFO = 20,
+#endif
 	__RTA_MAX
 };
 
@@ -557,6 +590,7 @@ enum {
 #define RTMGRP_DECnet_ROUTE     0x4000
 
 #define RTMGRP_IPV6_PREFIX	0x20000
+#define RTMGRP_HA			0x4000000
 #endif
 
 /* RTnetlink multicast groups */
@@ -613,6 +647,8 @@ enum rtnetlink_groups {
 #define RTNLGRP_IPV6_NETCONF	RTNLGRP_IPV6_NETCONF
 	RTNLGRP_MDB,
 #define RTNLGRP_MDB		RTNLGRP_MDB
+	RTNLGRP_HA,
+#define RTNLGRP_HA		RTNLGRP_HA
 	__RTNLGRP_MAX
 };
 #define RTNLGRP_MAX	(__RTNLGRP_MAX - 1)

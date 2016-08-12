@@ -14,6 +14,7 @@
 #include <linux/irqdomain.h>
 
 #include <asm/mipsmtregs.h>
+#include <asm/ptrace.h>
 
 #include <irq.h>
 
@@ -32,7 +33,7 @@ struct irqaction;
 
 extern unsigned long irq_hwmask[];
 extern int setup_irq_smtc(unsigned int irq, struct irqaction * new,
-                          unsigned long hwmask);
+			  unsigned long hwmask);
 
 static inline void smtc_im_ack_irq(unsigned int irq)
 {
@@ -60,7 +61,7 @@ extern void smtc_forward_irq(struct irq_data *d);
  * if option is enabled.
  *
  * Up through Linux 2.6.22 (at least) cpumask operations are very
- * inefficient on MIPS.  Initial prototypes of SMTC IRQ affinity
+ * inefficient on MIPS.	 Initial prototypes of SMTC IRQ affinity
  * used a "fast path" per-IRQ-descriptor cache of affinity information
  * to reduce latency.  As there is a project afoot to optimize the
  * cpumask implementations, this version is optimistically assuming
@@ -116,6 +117,46 @@ static inline int smtc_handle_on_other_cpu(unsigned int irq)
 
 #endif
 
+/*
+ * This struct defines the way the registers are stored on the stack during a
+ * system call/exception. As usual the registers k0/k1 aren't being saved.
+ */
+static __always_inline bool msa_get_reg(void)
+{
+	struct pt_regs regs;
+
+#ifndef CONFIG_KALLSYMS
+	/*
+	 * Remove any garbage that may be in regs (specially func
+	 * addresses) to avoid show_raw_backtrace() to report them
+	 */
+	memset(&regs, 0, sizeof(regs));
+#endif
+	__asm__ __volatile__(
+		".set push\n\t"
+		".set noat\n\t"
+#ifdef CONFIG_64BIT
+		"1: dla $1, 1b\n\t"
+		"sd $1, %0\n\t"
+		"sd $29, %1\n\t"
+		"sd $31, %2\n\t"
+#else
+		"1: la $1, 1b\n\t"
+		"sw $1, %0\n\t"
+		"sw $29, %1\n\t"
+		"sw $31, %2\n\t"
+#endif
+		".set pop\n\t"
+		: "=m" (regs.cp0_epc),
+		"=m" (regs.regs[29]), "=m" (regs.regs[31])
+		: : "memory");
+
+	if ((regs.cp0_status & ST0_KSU) == KSU_USER)
+		return true;
+	else
+		return false;
+}
+
 extern void do_IRQ(unsigned int irq);
 
 #ifdef CONFIG_MIPS_MT_SMTC_IRQAFF
@@ -133,7 +174,7 @@ extern void free_irqno(unsigned int irq);
 
 /*
  * Before R2 the timer and performance counter interrupts were both fixed to
- * IE7.  Since R2 their number has to be read from the c0_intctl register.
+ * IE7.	 Since R2 their number has to be read from the c0_intctl register.
  */
 #define CP0_LEGACY_COMPARE_IRQ 7
 #define CP0_LEGACY_PERFCNT_IRQ 7

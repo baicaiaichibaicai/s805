@@ -399,7 +399,11 @@ void switch_to_new_gdt(int cpu)
 
 static const struct cpu_dev *__cpuinitdata cpu_devs[X86_VENDOR_NUM] = {};
 
+#ifdef CONFIG_FERRET
+void __cpuinit get_model_name(struct cpuinfo_x86 *c)
+#else
 static void __cpuinit get_model_name(struct cpuinfo_x86 *c)
+#endif
 {
 	unsigned int *v;
 	char *p, *q;

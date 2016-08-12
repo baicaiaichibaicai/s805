@@ -40,6 +40,14 @@
 #include <asm/stacktrace.h>
 #include <asm/mach/time.h>
 
+#ifdef CONFIG_MACH_CORTINA_G2
+#include <mach/hardware.h>
+#endif /* CONFIG_MACH_CORTINA_G2 */
+
+#ifdef CONFIG_CACHE_L2X0
+#include <asm/hardware/cache-l2x0.h>
+#endif
+
 #ifdef CONFIG_CC_STACKPROTECTOR
 #include <linux/stackprotector.h>
 unsigned long __stack_chk_guard __read_mostly;

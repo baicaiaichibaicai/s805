@@ -357,8 +357,11 @@ static int xhci_try_enable_msi(struct usb_hcd *hcd)
 		free_irq(hcd->irq, hcd);
 	hcd->irq = 0;
 
+/* debug_Aaron on 04/19/20011, because our PCIe USB 3.0 card does not support MSI */
+#if 0
 	ret = xhci_setup_msix(xhci);
 	if (ret)
+#endif
 		/* fall back to msi*/
 		ret = xhci_setup_msi(xhci);
 

@@ -8,12 +8,21 @@
 #include <linux/pkt_cls.h>
 #include <net/gen_stats.h>
 #include <net/rtnetlink.h>
-
+#if IS_ENABLED(CONFIG_FERRET)
+#include <future/general.h>
+#include <future/omni/omni_qos_monitor.h>
+#include <future/omni/omni_track_cache.h>
+#include <future/omni/filter/omni_filter.h>
+extern unsigned int common_dl;
+#endif
 struct Qdisc_ops;
 struct qdisc_walker;
 struct tcf_walker;
 struct module;
 
+#ifdef CONFIG_CS752X_HW_ACCELERATION
+void cs_qos_set_skb_sw_only(struct sk_buff *skb);
+#endif
 struct qdisc_rate_table {
 	struct tc_ratespec rate;
 	u32		data[256];
@@ -87,6 +96,17 @@ struct Qdisc {
 	struct gnet_stats_basic_packed bstats;
 	unsigned int		__state;
 	struct gnet_stats_queue	qstats;
+	struct gnet_stats_monitor policy;
+	struct gnet_stats_monitor app;
+#ifdef CONFIG_CS752X_HW_ACCELERATION
+	/*
+	 * Cortina Hardware Accel
+	 */
+	u8			cs_handle;
+#define CS_QOS_IS_MULTIQ	(1 << 7)
+#define CS_QOS_HWQ_MAP		(1 << 6)
+#endif /* CONFIG_CS752X_HW_ACCELERATION */
+
 	struct rcu_head		rcu_head;
 	spinlock_t		busylock;
 	u32			limit;
@@ -464,6 +484,14 @@ static inline void qdisc_calculate_pkt_len(struct sk_buff *skb,
 static inline int qdisc_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 {
 	qdisc_calculate_pkt_len(skb, sch);
+#ifdef CONFIG_CS752X_HW_ACCELERATION
+	/* Cortina Acceleration
+	 * Check if this skb is enqueuing into MultiQ, if not, then this skb 
+	 * cannot be hardware accelerated by flow-based definition. */
+	if ((!(CS_QOS_IS_MULTIQ & sch->cs_handle)) &&
+			(!(sch->flags & TCQ_F_INGRESS)))
+		cs_qos_set_skb_sw_only(skb);
+#endif
 	return sch->enqueue(skb, sch);
 }
 
@@ -482,22 +510,56 @@ static inline void bstats_update(struct gnet_stats_basic_packed *bstats,
 }
 
 static inline void qdisc_bstats_update(struct Qdisc *sch,
-				       const struct sk_buff *skb)
+		const struct sk_buff *skb)
 {
 	bstats_update(&sch->bstats, skb);
 }
+
+#if IS_ENABLED(CONFIG_FERRET)
+static void qos_debug(struct sk_buff *skb)
+{
+#ifdef CONFIG_FERRET_CC
+   	if(skb->protocol == __constant_ntohs(ETH_P_IPV6)) {
+         print_ip6(skb->dev, skb, "[htb_enqueue] QoS Success", 0);
+         debug(DL_QOS, "\t\t\t  enqueue id[%x:%x]\n",TC_H_MAJ(skb->priority) >> 16,
+            TC_H_MIN(skb->priority));
+      } else if (skb->protocol == __constant_ntohs(ETH_P_IP)) {
+         print_ip(skb->dev, skb, "[htb_enqueue] QoS Success");
+         debug(DL_QOS, "\t\t\t  enqueue id[%x:%x]\n",TC_H_MAJ(skb->priority) >> 16,
+            TC_H_MIN(skb->priority));
+      }
+#else
+   	if(skb->protocol == __constant_ntohs(ETH_P_IPV6)) {
+         print_ip6(skb->dev, skb, "QOS", 0);
+         if (common_dl & DL_CAPTURE6)
+            debug(DL_QOS, "\t\t\t  enqueue id[%x:%x]\n",TC_H_MAJ(skb->priority) >> 16,
+               TC_H_MIN(skb->priority));
+      } else if (skb->protocol == __constant_ntohs(ETH_P_IP)) {
+         print_ip(skb->dev, skb, "QOS");
+         if (common_dl & DL_CAPTURE)
+            debug(DL_QOS, "\t\t\t  enqueue id[%x:%x]\n",TC_H_MAJ(skb->priority) >> 16,
+               TC_H_MIN(skb->priority));
+      }
+#endif
+}
+#endif
 
 static inline int __qdisc_enqueue_tail(struct sk_buff *skb, struct Qdisc *sch,
 				       struct sk_buff_head *list)
 {
 	__skb_queue_tail(list, skb);
 	sch->qstats.backlog += qdisc_pkt_len(skb);
-
 	return NET_XMIT_SUCCESS;
 }
 
 static inline int qdisc_enqueue_tail(struct sk_buff *skb, struct Qdisc *sch)
 {
+#if IS_ENABLED(CONFIG_FERRET)
+    if (skb->d_fwd) {
+      qos_debug(skb);
+    }
+#endif    
+
 	return __qdisc_enqueue_tail(skb, sch, &sch->q);
 }
 
@@ -509,6 +571,10 @@ static inline struct sk_buff *__qdisc_dequeue_head(struct Qdisc *sch,
 	if (likely(skb != NULL)) {
 		sch->qstats.backlog -= qdisc_pkt_len(skb);
 		qdisc_bstats_update(sch, skb);
+#ifdef CONFIG_OMNI
+        if (sch->policy.list.next != NULL)
+    		qdisc_monitor_update(sch, skb);
+#endif
 	}
 
 	return skb;
@@ -635,7 +701,17 @@ static inline int qdisc_drop(struct sk_buff *skb, struct Qdisc *sch)
 static inline int qdisc_reshape_fail(struct sk_buff *skb, struct Qdisc *sch)
 {
 	sch->qstats.drops++;
-
+#if IS_ENABLED(CONFIG_FERRET)
+    if (skb->d_fwd) {
+#ifdef CONFIG_FERRET_CC
+        print_ip(skb->dev, skb, "[htb_enqueue] QoS Drop");
+#else
+        print_ip(skb->dev, skb, "DR:QOS");
+#endif
+        debug(DL_QOS, "\t\t\t  enqueue id[%x:%x]\n",TC_H_MAJ(skb->priority) >> 16,
+            TC_H_MIN(skb->priority));
+    }
+#endif    
 #ifdef CONFIG_NET_CLS_ACT
 	if (sch->reshape_fail == NULL || sch->reshape_fail(skb, sch))
 		goto drop;

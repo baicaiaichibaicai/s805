@@ -246,20 +246,6 @@ struct fsg_operations {
 	 * set).
 	 */
 	int (*thread_exits)(struct fsg_common *common);
-
-	/*
-	 * Called prior to ejection.  Negative return means error,
-	 * zero means to continue with ejection, positive means not to
-	 * eject.
-	 */
-	int (*pre_eject)(struct fsg_common *common,
-			 struct fsg_lun *lun, int num);
-	/*
-	 * Called after ejection.  Negative return means error, zero
-	 * or positive is just a success.
-	 */
-	int (*post_eject)(struct fsg_common *common,
-			  struct fsg_lun *lun, int num);
 };
 
 /* Data shared by all the FSG instances. */
@@ -427,6 +413,7 @@ static int fsg_set_halt(struct fsg_dev *fsg, struct usb_ep *ep)
 /* Caller must hold fsg->lock */
 static void wakeup_thread(struct fsg_common *common)
 {
+	smp_wmb();	/* ensure the write of bh->state is complete */
 	/* Tell the main thread that something has happened */
 	common->thread_wakeup_needed = 1;
 	if (common->thread_task)
@@ -646,6 +633,7 @@ static int sleep_thread(struct fsg_common *common)
 	}
 	__set_current_state(TASK_RUNNING);
 	common->thread_wakeup_needed = 0;
+	smp_rmb();	/* ensure the latest bh->state is visible */
 	return rc;
 }
 
@@ -992,7 +980,7 @@ static int do_synchronize_cache(struct fsg_common *common)
 static void invalidate_sub(struct fsg_lun *curlun)
 {
 	struct file	*filp = curlun->filp;
-	struct inode	*inode = filp->f_path.dentry->d_inode;
+	struct inode	*inode = file_inode(filp);
 	unsigned long	rc;
 
 	rc = invalidate_mapping_pages(inode->i_mapping, 0, -1);
@@ -1374,26 +1362,13 @@ static int do_start_stop(struct fsg_common *common)
 	if (!loej)
 		return 0;
 
-	/* Simulate an unload/eject */
-	if (common->ops && common->ops->pre_eject) {
-		int r = common->ops->pre_eject(common, curlun,
-					       curlun - common->luns);
-		if (unlikely(r < 0))
-			return r;
-		else if (r)
-			return 0;
-	}
-
 	up_read(&common->filesem);
 	down_write(&common->filesem);
 	fsg_lun_close(curlun);
 	up_write(&common->filesem);
 	down_read(&common->filesem);
 
-	return common->ops && common->ops->post_eject
-		? min(0, common->ops->post_eject(common, curlun,
-						 curlun - common->luns))
-		: 0;
+	return 0;
 }
 
 static int do_prevent_allow(struct fsg_common *common)
@@ -1718,7 +1693,7 @@ static int check_command(struct fsg_common *common, int cmnd_size,
 			 int needs_medium, const char *name)
 {
 	int			i;
-	int			lun = common->cmnd[1] >> 5;
+	unsigned int		lun = common->cmnd[1] >> 5;
 	static const char	dirletter[4] = {'u', 'o', 'i', 'n'};
 	char			hdlen[20];
 	struct fsg_lun		*curlun;
@@ -1784,7 +1759,7 @@ static int check_command(struct fsg_common *common, int cmnd_size,
 
 	/* Check that the LUN values are consistent */
 	if (common->lun != lun)
-		DBG(common, "using LUN %d from CBW, not LUN %d from CDB\n",
+		DBG(common, "using LUN %u from CBW, not LUN %u from CDB\n",
 		    common->lun, lun);
 
 	/* Check the LUN */
@@ -1804,7 +1779,7 @@ static int check_command(struct fsg_common *common, int cmnd_size,
 		 */
 		if (common->cmnd[0] != INQUIRY &&
 		    common->cmnd[0] != REQUEST_SENSE) {
-			DBG(common, "unsupported LUN %d\n", common->lun);
+			DBG(common, "unsupported LUN %u\n", common->lun);
 			return -EINVAL;
 		}
 	}
@@ -2196,7 +2171,7 @@ static int received_cbw(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 	if (common->data_size == 0)
 		common->data_dir = DATA_DIR_NONE;
 	common->lun = cbw->Lun;
-	if (common->lun >= 0 && common->lun < common->nluns)
+	if (common->lun < common->nluns)
 		common->curlun = &common->luns[common->lun];
 	else
 		common->curlun = NULL;

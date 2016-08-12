@@ -1018,7 +1018,16 @@ static int ehci_hub_control (
 			 */
 			temp &= ~PORT_WKCONN_E;
 			temp |= PORT_WKDISC_E | PORT_WKOC_E;
+#ifndef CONFIG_CORTINA_DISABLE_USB_PHY0_CLOCK
 			ehci_writel(ehci, temp | PORT_SUSPEND, status_reg);
+#else
+			if (wIndex == 0) {
+				printk("%s:ehci suspend work around\n", __FUNCTION__);
+				ehci_writel(ehci, temp, status_reg);
+			} else {
+				ehci_writel(ehci, temp | PORT_SUSPEND, status_reg);
+			}
+#endif
 			if (ehci->has_hostpc) {
 				spin_unlock_irqrestore(&ehci->lock, flags);
 				msleep(5);/* 5ms for HCD enter low pwr mode */

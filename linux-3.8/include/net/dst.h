@@ -332,6 +332,7 @@ static inline void __skb_tunnel_rx(struct sk_buff *skb, struct net_device *dev)
 	skb_set_queue_mapping(skb, 0);
 	skb_dst_drop(skb);
 	nf_reset(skb);
+	omni_reset(skb);
 }
 
 /**

@@ -19,6 +19,7 @@
 #ifdef CONFIG_MIPS_MT_SMTC
 #include <asm/mipsmtregs.h>
 #endif
+#include <asm/msa_calling.h>
 
 #ifndef CONFIG_PREEMPT
 #define resume_kernel	restore_all
@@ -52,6 +53,7 @@ resume_userspace:
 	LONG_L	a2, TI_FLAGS($28)	# current->work
 	andi	t0, a2, _TIF_WORK_MASK	# (ignoring syscall_trace)
 	bnez	t0, work_pending
+	MSA_USER
 	j	restore_all
 
 #ifdef CONFIG_PREEMPT
@@ -87,6 +89,7 @@ FEXPORT(syscall_exit)
 	li	t0, _TIF_ALLWORK_MASK
 	and	t0, a2, t0
 	bnez	t0, syscall_exit_work
+	MSA_USER
 
 restore_all:				# restore full frame
 #ifdef CONFIG_MIPS_MT_SMTC
@@ -129,10 +132,11 @@ restore_all:				# restore full frame
 	RESTORE_AT
 	RESTORE_STATIC
 restore_partial:		# restore partial frame
-#ifdef CONFIG_TRACE_IRQFLAGS
+#if defined(CONFIG_TRACE_IRQFLAGS) || defined(CONFIG_MICROSTATE_ACCT)
 	SAVE_STATIC
 	SAVE_AT
 	SAVE_TEMP
+#ifdef CONFIG_TRACE_IRQFLAGS
 	LONG_L	v0, PT_STATUS(sp)
 #if defined(CONFIG_CPU_R3000) || defined(CONFIG_CPU_TX39XX)
 	and	v0, ST0_IEP
@@ -144,6 +148,8 @@ restore_partial:		# restore partial frame
 	b	2f
 1:	jal	trace_hardirqs_off
 2:
+#endif
+	MSA_USER
 	RESTORE_TEMP
 	RESTORE_AT
 	RESTORE_STATIC
@@ -164,6 +170,12 @@ work_resched:
 	LONG_L	a2, TI_FLAGS($28)
 	andi	t0, a2, _TIF_WORK_MASK	# is there any work to be done
 					# other than syscall tracing?
+#ifdef CONFIG_MICROSTATE_ACCT
+	bnez    t0, msa_user_skip
+	MSA_USER
+	j	restore_all
+msa_user_skip:
+#endif
 	beqz	t0, restore_all
 	andi	t0, a2, _TIF_NEED_RESCHED
 	bnez	t0, work_resched

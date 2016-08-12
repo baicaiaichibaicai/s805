@@ -31,6 +31,10 @@
 #define __ARCH_WANT_SYS_OLD_MMAP
 #define __ARCH_WANT_SYS_OLD_SELECT
 
+#if defined(CONFIG_CORTINA_FUTURE)
+#define __ARCH_WANT_SYS_TIME
+#endif
+
 #if !defined(CONFIG_AEABI) || defined(CONFIG_OABI_COMPAT)
 #define __ARCH_WANT_SYS_TIME
 #define __ARCH_WANT_SYS_IPC

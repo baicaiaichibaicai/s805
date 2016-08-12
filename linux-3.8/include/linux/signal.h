@@ -19,6 +19,19 @@ struct sigqueue {
 	struct user_struct *user;
 };
 
+//Modifed odorid
+//#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+struct sigaction {
+	unsigned int    sa_flags;
+	__sighandler_t  sa_handler;
+	sigset_t    sa_mask;    /* mask last for extensibility */
+};
+
+struct k_sigaction {
+	struct sigaction sa;
+};
+#endif
 /* flags values. */
 #define SIGQUEUE_PREALLOC	1
 

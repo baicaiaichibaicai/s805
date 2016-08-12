@@ -1460,10 +1460,16 @@ int hid_connect(struct hid_device *hdev, unsigned int connect_mask)
 	if (ret)
 		hid_warn(hdev,
 			 "can't create sysfs report descriptor attribute err: %d\n", ret);
-
+	
+#ifdef CONFIG_FERRET
+	if (!strstr(hdev->name,"LANNERINC.COM LANNER LCM")) 
 	hid_info(hdev, "%s: %s HID v%x.%02x %s [%s] on %s\n",
 		 buf, bus, hdev->version >> 8, hdev->version & 0xff,
 		 type, hdev->name, hdev->phys);
+#else
+	hid_info(hdev, "%s: %s HID v%x.%02x %s [%s] on %s\n", buf, bus, hdev->version >> 8, hdev->version & 0xff, type, hdev->name, hdev->phys);
+
+#endif
 
 	return 0;
 }

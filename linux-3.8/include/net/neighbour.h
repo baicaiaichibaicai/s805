@@ -1,6 +1,7 @@
 #ifndef _NET_NEIGHBOUR_H
 #define _NET_NEIGHBOUR_H
 
+
 #include <linux/neighbour.h>
 
 /*
@@ -26,6 +27,11 @@
 #include <linux/sysctl.h>
 #include <linux/workqueue.h>
 #include <net/rtnetlink.h>
+
+#ifdef CONFIG_FERRET
+#include <future/net/vmac.h>
+#endif
+
 
 /*
  * NUD stands for "neighbor unreachability detection"
@@ -339,16 +345,37 @@ static inline int neigh_hh_output(const struct hh_cache *hh, struct sk_buff *skb
 	unsigned int seq;
 	int hh_len;
 
+#ifdef CONFIG_FERRET
+	int iface = skb->dev->iface;
+	unsigned char *p_vmac = NULL;
+	struct ethhdr *p_eth;
+
+	if (match_vmac_interface_info(iface)) 
+		p_vmac = vmac_get_by_skb(skb, iface);
+#endif
+
 	do {
 		seq = read_seqbegin(&hh->hh_lock);
 		hh_len = hh->hh_len;
 		if (likely(hh_len <= HH_DATA_MOD)) {
 			/* this is inlined by gcc */
 			memcpy(skb->data - HH_DATA_MOD, hh->hh_data, HH_DATA_MOD);
+#ifdef CONFIG_FERRET
+			if (p_vmac) {
+				p_eth = (struct ethhdr *)(((u8 *)(skb->data - HH_DATA_MOD)) + (HH_DATA_OFF(sizeof(*p_eth))));
+				memcpy(p_eth->h_source, p_vmac, ETH_ALEN);
+			}
+#endif
 		} else {
 			int hh_alen = HH_DATA_ALIGN(hh_len);
 
 			memcpy(skb->data - hh_alen, hh->hh_data, hh_alen);
+#ifdef CONFIG_FERRET
+			if (p_vmac) {
+				p_eth = (struct ethhdr *)(((u8 *)(skb->data - hh_alen)) + (HH_DATA_OFF(sizeof(*p_eth))));
+				memcpy(p_eth->h_source, p_vmac, ETH_ALEN);
+			}
+#endif
 		}
 	} while (read_seqretry(&hh->hh_lock, seq));
 

@@ -12,6 +12,12 @@
  */
 
 #include <linux/device.h>
+
+//odroid
+#ifdef CONFIG_ARCH_MESON8B
+#include <linux/err.h>
+#endif
+
 #include <linux/errno.h>
 #include <linux/module.h>
 #include <linux/io.h>
@@ -30,6 +36,37 @@ struct gg_data {
 	int out_gpio;
 };
 
+//odroid
+#if !defined(CONFIG_ARCH_MESON8B)
+/* Private function for resolving node pointer to gpio_chip */
+static int of_gpiochip_find_and_xlate(struct gpio_chip *gc, void *data)
+{
+	struct gg_data *gg_data = data;
+	int ret;
+
+	if ((gc->of_node != gg_data->gpiospec.np) ||
+	    (gc->of_gpio_n_cells != gg_data->gpiospec.args_count) ||
+	    (!gc->of_xlate))
+		return false;
+
+	ret = gc->of_xlate(gc, &gg_data->gpiospec, gg_data->flags);
+	if (ret < 0) {
+		/* We've found the gpio chip, but the translation failed.
+		 * Return true to stop looking and return the translation
+		 * error via out_gpio
+		 */
+		gg_data->out_gpio = ret;
+		return true;
+	 }
+
+	gg_data->out_gpio = ret + gc->base;
+	return true;
+}
+#endif
+
+//odroid
+//blocking
+#if 0 
 /* Private function for resolving node pointer to gpio_chip */
 static int of_gpiochip_find_and_xlate(struct gpio_chip *gc, void *data)
 {
@@ -48,6 +85,7 @@ static int of_gpiochip_find_and_xlate(struct gpio_chip *gc, void *data)
 	gg_data->out_gpio = ret + gc->base;
 	return true;
 }
+#endif
 
 /**
  * of_get_named_gpio_flags() - Get a GPIO number and flags to use with GPIO API
@@ -60,6 +98,65 @@ static int of_gpiochip_find_and_xlate(struct gpio_chip *gc, void *data)
  * value on the error condition. If @flags is not NULL the function also fills
  * in flags for the GPIO.
  */
+
+//odroid
+#if defined(CONFIG_ARCH_MESON8B)
+#include <linux/amlogic/aml_gpio_consumer.h>
+int of_get_named_gpio_flags(struct device_node *np, const char *propname,
+                int index __attribute__((unused)),
+                enum of_gpio_flags *flags)
+{
+    const char *str;
+    int gpio;
+
+    if(of_property_read_string(np, "gpios", &str))
+        return -EPROBE_DEFER;
+
+    gpio = amlogic_gpio_name_map_num(str);
+
+    /* Set ODROID-C1 status LED to active low */
+    if (flags != NULL) {
+        if (gpio == 13)
+            *flags = 1;
+        else
+            *flags = 0;
+    }
+
+    return gpio;
+}
+#else
+int of_get_named_gpio_flags(struct device_node *np, const char *propname,
+                           int index, enum of_gpio_flags *flags)
+{
+	/* Return -EPROBE_DEFER to support probe() functions to be called
+	 * later when the GPIO actually becomes available
+	 */
+	struct gg_data gg_data = { .flags = flags, .out_gpio = -EPROBE_DEFER };
+	int ret;
+
+	/* .of_xlate might decide to not fill in the flags, so clear it. */
+	if (flags)
+		*flags = 0;
+
+	ret = of_parse_phandle_with_args(np, propname, "#gpio-cells", index,
+					 &gg_data.gpiospec);
+	if (ret) {
+		pr_debug("%s: can't parse gpios property\n", __func__);
+		return ret;
+	}
+
+	gpiochip_find(&gg_data, of_gpiochip_find_and_xlate);
+
+	of_node_put(gg_data.gpiospec.np);
+	pr_debug("%s exited with status %d\n", __func__, gg_data.out_gpio);
+	return gg_data.out_gpio;
+}
+#endif
+EXPORT_SYMBOL(of_get_named_gpio_flags);
+
+#if 0
+//odroid
+//blocking
 int of_get_named_gpio_flags(struct device_node *np, const char *propname,
                            int index, enum of_gpio_flags *flags)
 {
@@ -87,6 +184,7 @@ int of_get_named_gpio_flags(struct device_node *np, const char *propname,
 	return gg_data.out_gpio;
 }
 EXPORT_SYMBOL(of_get_named_gpio_flags);
+#endif
 
 /**
  * of_gpio_named_count - Count GPIOs for a device
@@ -238,6 +336,10 @@ static void of_gpiochip_add_pin_range(struct gpio_chip *chip)
 		if (!pctldev)
 			break;
 
+//odroid
+//blocking
+#if 0
+
 		/*
 		 * This assumes that the n GPIO pins are consecutive in the
 		 * GPIO number space, and that the pins are also consecutive
@@ -254,7 +356,7 @@ static void of_gpiochip_add_pin_range(struct gpio_chip *chip)
 					     0, /* offset in gpiochip */
 					     pinspec.args[0],
 					     pinspec.args[1]);
-
+#endif
 		if (ret)
 			break;
 

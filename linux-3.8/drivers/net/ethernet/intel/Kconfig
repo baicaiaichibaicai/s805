@@ -21,6 +21,11 @@ config NET_VENDOR_INTEL
 	  your specific card in the following questions.
 
 if NET_VENDOR_INTEL
+config NETDEVICES_MULTIQUEUE
+	bool "Netdevice multiple hardware queue support"
+	---help---
+	Say Y here if you want to allow the network stack to use multiple
+	hardware TX queues on an ethernet device.
 
 config E100
 	tristate "Intel(R) PRO/100+ support"
@@ -232,5 +237,24 @@ config IXGBEVF
 	  To compile this driver as a module, choose M here. The module
 	  will be called ixgbevf.  MSI-X interrupt support is required
 	  for this driver to work correctly.
+
+config I40E
+	tristate "Intel(R) Ethernet Controller XL710 Family support"
+	select PTP_1588_CLOCK
+	depends on PCI
+	---help---
+	  This driver supports Intel(R) Ethernet Controller XL710 Family of
+	  devices.  For more information on how to identify your adapter, go
+	  to the Adapter & Driver ID Guide at:
+
+	  <http://support.intel.com/support/network/adapter/pro100/21397.htm>
+
+	  For general information and support, go to the Intel support
+	  website at:
+
+	  <http://support.intel.com>
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called i40e.
 
 endif # NET_VENDOR_INTEL

@@ -18,7 +18,6 @@
 #include <linux/types.h>
 #include <linux/compiler.h>
 #include <linux/netfilter_ipv4.h>
-
 #include <linux/netfilter/x_tables.h>
 
 #ifndef __KERNEL__

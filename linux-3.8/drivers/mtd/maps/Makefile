@@ -18,6 +18,14 @@ obj-$(CONFIG_MTD_CK804XROM)	+= ck804xrom.o
 obj-$(CONFIG_MTD_TSUNAMI)	+= tsunami_flash.o
 obj-$(CONFIG_MTD_PXA2XX)	+= pxa2xx-flash.o
 obj-$(CONFIG_MTD_MBX860)	+= mbx860.o
+
+###### for Storlink Soc #######
+obj-$(CONFIG_MTD_CORTINA_CS752X_CFI) += cs752x_cfi.o
+obj-$(CONFIG_MTD_CORTINA_CS752X_SERIAL_ATMEL) += cs752x_atmel.o
+obj-$(CONFIG_MTD_CORTINA_CS752X_SERIAL_SPANSION) += cs752x_spansion.o
+obj-$(CONFIG_MTD_CORTINA_CS752X_SERIAL_ST) += cs752x_m25p80.o
+obj-$(CONFIG_MTD_CORTINA_CS752X_SERIAL) += cs752x_serial.o
+
 obj-$(CONFIG_MTD_OCTAGON)	+= octagon-5066.o
 obj-$(CONFIG_MTD_PHYSMAP)	+= physmap.o
 obj-$(CONFIG_MTD_PHYSMAP_OF)	+= physmap_of.o

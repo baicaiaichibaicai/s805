@@ -84,6 +84,13 @@ enum {
 	/* bit mask for work_busy() return values */
 	WORK_BUSY_PENDING	= 1 << 0,
 	WORK_BUSY_RUNNING	= 1 << 1,
+
+//Modifed odorid
+//#if defined(CONFIG_OCTEON_FUTURE_BOARD) || defined(CONFIG_PLAT_MESON)
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+	/* maximum string length for set_worker_desc() */
+	WORKER_DESC_LEN		= 24,
+#endif
 };
 
 struct work_struct {
@@ -428,6 +435,9 @@ extern void workqueue_set_max_active(struct workqueue_struct *wq,
 extern bool workqueue_congested(unsigned int cpu, struct workqueue_struct *wq);
 extern unsigned int work_cpu(struct work_struct *work);
 extern unsigned int work_busy(struct work_struct *work);
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+extern void print_worker_info(const char *log_lvl, struct task_struct *task);
+#endif
 
 /*
  * Like above, but uses del_timer() instead of del_timer_sync(). This means,

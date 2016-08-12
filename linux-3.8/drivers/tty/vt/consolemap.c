@@ -482,11 +482,21 @@ con_insert_unipair(struct uni_pagedir *p, u_short unicode, u_short fontpos)
 			p1[i] = NULL;
 	}
 
+	//while(1);
+
 	if (!(p2 = p1[n = (unicode >> 6) & 0x1f])) {
 		p2 = p1[n] = kmalloc(64*sizeof(u16), GFP_KERNEL);
-		if (!p2) return -ENOMEM;
-		memset(p2, 0xff, 64*sizeof(u16)); /* No glyphs for the characters (yet) */
+		if (!p2) 
+		{
+			return -ENOMEM;
+		}
+
+		//odroid 
+		//memset(p2, 0xff, 64*sizeof(u16)); /* No glyphs for the characters (yet) */
+                memset(p2, 0x00, 64*sizeof(u16)); /* No glyphs for the characters (yet) */
+
 	}
+	//while(1);
 
 	p2[unicode & 0x3f] = fontpos;
 	
@@ -690,8 +700,11 @@ int con_set_default_unimap(struct vc_data *vc)
 		return err;
 	}
 
+	//while(1);
+
 	for (i = 0; i <= 3; i++)
 		set_inverse_transl(vc, p, i);	/* Update all inverse translations */
+	//while(1);
 	set_inverse_trans_unicode(vc, p);
 	dflt = p;
 	return err;

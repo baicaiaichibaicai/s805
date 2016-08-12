@@ -13,6 +13,7 @@
 #include <linux/smp.h>
 #include <linux/mm.h>
 #include <linux/hugetlb.h>
+#include <linux/module.h>
 
 #include <asm/cpu.h>
 #include <asm/bootinfo.h>
@@ -94,6 +95,7 @@ void local_flush_tlb_all(void)
 	FLUSH_ITLB;
 	EXIT_CRITICAL(flags);
 }
+EXPORT_SYMBOL(local_flush_tlb_all);
 
 /* All entries common to a mm share an asid.  To effectively flush
    these entries, we just bump the asid. */
@@ -406,7 +408,9 @@ void __cpuinit tlb_init(void)
 	 *     be set to fixed-size pages.
 	 */
 	write_c0_pagemask(PM_DEFAULT_MASK);
+#ifndef CONFIG_MAPPED_KERNEL
 	write_c0_wired(0);
+#endif
 	if (current_cpu_type() == CPU_R10000 ||
 	    current_cpu_type() == CPU_R12000 ||
 	    current_cpu_type() == CPU_R14000)
@@ -424,7 +428,7 @@ void __cpuinit tlb_init(void)
 		write_c0_pagegrain(pg);
 	}
 
-        /* From this point on the ARC firmware is dead.  */
+	/* From this point on the ARC firmware is dead.	 */
 	local_flush_tlb_all();
 
 	/* Did I tell you that ARC SUCKS?  */

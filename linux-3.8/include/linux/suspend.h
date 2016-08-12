@@ -33,11 +33,22 @@ static inline void pm_restore_console(void)
 
 typedef int __bitwise suspend_state_t;
 
+
+#if 1
 #define PM_SUSPEND_ON		((__force suspend_state_t) 0)
 #define PM_SUSPEND_STANDBY	((__force suspend_state_t) 1)
 #define PM_SUSPEND_MEM		((__force suspend_state_t) 3)
 #define PM_SUSPEND_MAX		((__force suspend_state_t) 4)
-
+#endif
+/*
+//odroid
+#define PM_SUSPEND_ON		((__force suspend_state_t) 0)
+#define PM_SUSPEND_FREEZE	((__force suspend_state_t) 1)
+#define PM_SUSPEND_STANDBY	((__force suspend_state_t) 2)
+#define PM_SUSPEND_MEM		((__force suspend_state_t) 3)
+#define PM_SUSPEND_MIN		PM_SUSPEND_FREEZE
+#define PM_SUSPEND_MAX		((__force suspend_state_t) 4)
+*/
 enum suspend_stat_step {
 	SUSPEND_FREEZE = 1,
 	SUSPEND_PREPARE,
@@ -193,6 +204,9 @@ struct platform_suspend_ops {
 extern void suspend_set_ops(const struct platform_suspend_ops *ops);
 extern int suspend_valid_only_mem(suspend_state_t state);
 
+//odroid
+//extern void freeze_wake(void);
+
 /**
  * arch_suspend_disable_irqs - disable IRQs for suspend
  *
@@ -212,8 +226,12 @@ extern void arch_suspend_disable_irqs(void);
 extern void arch_suspend_enable_irqs(void);
 
 extern int pm_suspend(suspend_state_t state);
+
 #else /* !CONFIG_SUSPEND */
 #define suspend_valid_only_mem	NULL
+
+//odroid
+//static inline void freeze_wake(void) {}
 
 static inline void suspend_set_ops(const struct platform_suspend_ops *ops) {}
 static inline int pm_suspend(suspend_state_t state) { return -ENOSYS; }

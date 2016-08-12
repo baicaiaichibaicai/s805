@@ -3,10 +3,13 @@
 #
 ccflags-$(CONFIG_USB_GADGET_DEBUG) := -DDEBUG
 
-obj-$(CONFIG_USB_GADGET)	+= udc-core.o
-obj-$(CONFIG_USB_LIBCOMPOSITE)	+= libcomposite.o
+#obj-$(CONFIG_USB_GADGET)	+= udc-core.o
+#obj-$(CONFIG_USB_LIBCOMPOSITE)	+= libcomposite.o
+obj-y 				+= libcomposite.o
+
 libcomposite-y			:= usbstring.o config.o epautoconf.o
-libcomposite-y			+= composite.o
+libcomposite-y			+= composite.o functions.o 
+#configfs.o
 obj-$(CONFIG_USB_DUMMY_HCD)	+= dummy_hcd.o
 obj-$(CONFIG_USB_NET2272)	+= net2272.o
 obj-$(CONFIG_USB_NET2280)	+= net2280.o
@@ -35,6 +38,25 @@ mv_udc-y			:= mv_udc_core.o
 obj-$(CONFIG_USB_FUSB300)	+= fusb300_udc.o
 obj-$(CONFIG_USB_MV_U3D)	+= mv_u3d_core.o
 
+# cs752x OTG
+#dwc_otg-objs := dwc_otg_cil.o dwc_otg_cil_intr.o dwc_otg_driver.o dwc_otg_pcd_intr.o dwc_otg_pcd.o dwc_otg_pcd_linux.o
+
+
+# USB Functions
+usb_f_acm-y			:= f_acm.o
+#obj-y				+= usb_f_acm.o
+obj-$(CONFIG_USB_F_ACM)		+= usb_f_acm.o
+usb_f_ss_lb-y			:= f_loopback.o f_sourcesink.o
+obj-$(CONFIG_USB_F_SS_LB)	+= usb_f_ss_lb.o
+#obj-y				+= usb_f_ss_lb.o
+#obj-y				+= u_serial.o
+obj-$(CONFIG_USB_U_SERIAL)	+= u_serial.o
+usb_f_serial-y			:= f_serial.o
+#obj-y				+= usb_f_serial.o
+obj-$(CONFIG_USB_F_SERIAL)	+= usb_f_serial.o
+usb_f_obex-y			:= f_obex.o
+obj-$(CONFIG_USB_F_OBEX)	+= usb_f_obex.o
+
 #
 # USB gadget drivers
 #
@@ -54,11 +76,14 @@ g_nokia-y			:= nokia.o
 g_webcam-y			:= webcam.o
 g_ncm-y				:= ncm.o
 g_acm_ms-y			:= acm_ms.o
+g_android-y			:= android.o
 g_tcm_usb_gadget-y		:= tcm_usb_gadget.o
 
 obj-$(CONFIG_USB_ZERO)		+= g_zero.o
 obj-$(CONFIG_USB_AUDIO)		+= g_audio.o
-obj-$(CONFIG_USB_ETH)		+= g_ether.o
+#obj-$(CONFIG_USB_ETH)		+= g_ether.o
+obj-y				+= g_ether.o
+
 obj-$(CONFIG_USB_GADGETFS)	+= gadgetfs.o
 obj-$(CONFIG_USB_FUNCTIONFS)	+= g_ffs.o
 obj-$(CONFIG_USB_MASS_STORAGE)	+= g_mass_storage.o
@@ -66,6 +91,8 @@ obj-$(CONFIG_USB_G_SERIAL)	+= g_serial.o
 obj-$(CONFIG_USB_G_PRINTER)	+= g_printer.o
 obj-$(CONFIG_USB_MIDI_GADGET)	+= g_midi.o
 obj-$(CONFIG_USB_CDC_COMPOSITE) += g_cdc.o
+#obj-y				+= g_cdc.o
+
 obj-$(CONFIG_USB_G_HID)		+= g_hid.o
 obj-$(CONFIG_USB_G_DBGP)	+= g_dbgp.o
 obj-$(CONFIG_USB_G_MULTI)	+= g_multi.o
@@ -73,4 +100,5 @@ obj-$(CONFIG_USB_G_NOKIA)	+= g_nokia.o
 obj-$(CONFIG_USB_G_WEBCAM)	+= g_webcam.o
 obj-$(CONFIG_USB_G_NCM)		+= g_ncm.o
 obj-$(CONFIG_USB_G_ACM_MS)	+= g_acm_ms.o
+obj-$(CONFIG_USB_G_ANDROID)	+= g_android.o
 obj-$(CONFIG_USB_GADGET_TARGET)	+= tcm_usb_gadget.o

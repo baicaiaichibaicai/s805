@@ -551,6 +551,8 @@ void __init default_get_smp_config(unsigned int early)
 
 	if (!early)
 		printk(KERN_INFO "Processors: %d\n", num_processors);
+
+
 	/*
 	 * Only use the first configuration found.
 	 */

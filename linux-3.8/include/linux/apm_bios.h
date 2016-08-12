@@ -98,4 +98,28 @@ extern struct apm_info	apm_info;
  */
 #define APM_DEVICE_BALL		((apm_info.connection_version > 0x0100) ? \
 				 APM_DEVICE_ALL : APM_DEVICE_OLD_ALL)
+
+#ifdef ARCH_GOLDENGATE
+// for Cortina Golden Gate power control
+struct pwc_ioctl_data {
+	cs_uint32 action;	// sword struct
+	cs_uint32 data;		// stand shutdown time for PWC_SET_SHUT_TIME
+				// stand shutdown source for PWC_WAIT_BTN
+};
+#endif
+
+#define POWEROFF		0x01
+#define RESTORE_DEFAULT		0x02
+#define SYSTEM_REBOOT		0x04
+
+#define PWR_SRC_CIR		0x10
+#define PWR_SRC_RTC		0x20
+#define PWR_SRC_BTN		0x40
+
+#define	PWC_IOCTL_BASE		'A'		// use linux APM ioctl
+#define PWC_SET_SHUT_TIME	_IOW('A', 16, struct pwc_ioctl_data)
+#define PWC_GET_SHUT_TIME	_IOR('A', 17, struct pwc_ioctl_data)
+#define PWC_WAIT_BTN		_IOR('A', 18, struct pwc_ioctl_data)
+#define PWC_SHUTDOWN		_IO ('A', 19)
+
 #endif	/* LINUX_APM_H */

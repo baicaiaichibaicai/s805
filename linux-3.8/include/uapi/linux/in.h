@@ -29,6 +29,7 @@ enum {
   IPPROTO_IPIP = 4,		/* IPIP tunnels (older KA9Q tunnels use 94) */
   IPPROTO_TCP = 6,		/* Transmission Control Protocol	*/
   IPPROTO_EGP = 8,		/* Exterior Gateway Protocol		*/
+  IPPROTO_IGRP = 9,
   IPPROTO_PUP = 12,		/* PUP protocol				*/
   IPPROTO_UDP = 17,		/* User Datagram Protocol		*/
   IPPROTO_IDP = 22,		/* XNS IDP protocol			*/
@@ -40,10 +41,14 @@ enum {
 
   IPPROTO_ESP = 50,            /* Encapsulation Security Payload protocol */
   IPPROTO_AH = 51,             /* Authentication Header protocol       */
+  IPPROTO_EIGRP = 88,
+  IPPROTO_OSPF = 89,
   IPPROTO_BEETPH = 94,	       /* IP option pseudo header for BEET */
   IPPROTO_PIM    = 103,		/* Protocol Independent Multicast	*/
 
   IPPROTO_COMP   = 108,                /* Compression Header protocol */
+  IPPROTO_VRRP	 = 112,		/* VRRP Routing protocol */
+  IPPROTO_ISIS	 = 124,
   IPPROTO_SCTP   = 132,		/* Stream Control Transport Protocol	*/
   IPPROTO_UDPLITE = 136,	/* UDP-Lite (RFC 3828)			*/
 
@@ -76,6 +81,8 @@ struct in_addr {
 #define IP_XFRM_POLICY	17
 #define IP_PASSSEC	18
 #define IP_TRANSPARENT	19
+#define IP_IPSEC_REFINFO 30  /*used with CONFIG_INET_IPSEC_SAREF*/
+#define IP_IPSEC_BINDREF 31
 
 /* BSD compatibility */
 #define IP_RECVRETOPTS	IP_RETOPTS
@@ -86,6 +93,8 @@ struct in_addr {
 
 #define IP_MINTTL       21
 #define IP_NODEFRAG     22
+
+#define IP_INSPECT		23
 
 /* IP_MTU_DISCOVER values */
 #define IP_PMTUDISC_DONT		0	/* Never send DF frames */

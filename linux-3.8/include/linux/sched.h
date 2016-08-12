@@ -30,6 +30,10 @@ struct sched_param {
 #include <linux/smp.h>
 #include <linux/sem.h>
 #include <linux/signal.h>
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+#include <linux/msa.h>
+#include <linux/hardirq.h>
+#endif
 #include <linux/compiler.h>
 #include <linux/completion.h>
 #include <linux/pid.h>
@@ -358,6 +362,9 @@ extern int sysctl_max_map_count;
 #include <linux/aio.h>
 
 #ifdef CONFIG_MMU
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+extern bool check_heap_stack_gap(const struct vm_area_struct *vma, unsigned long addr, unsigned long len);
+#endif
 extern void arch_pick_mmap_layout(struct mm_struct *mm);
 extern unsigned long
 arch_get_unmapped_area(struct file *, unsigned long, unsigned long,
@@ -1652,6 +1659,17 @@ static inline int rt_task(struct task_struct *p)
 {
 	return rt_prio(p->prio);
 }
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+#ifdef CONFIG_PREEMPT_RT_FULL
+static inline bool cur_pf_disabled(void) { return current->pagefault_disabled; }
+#else
+static inline bool cur_pf_disabled(void) { return false; }
+#endif
+static inline bool pagefault_disabled(void)
+{
+	return in_atomic() || cur_pf_disabled();
+}
+#endif
 
 static inline struct pid *task_pid(struct task_struct *task)
 {
@@ -1725,6 +1743,24 @@ static inline pid_t task_tgid_vnr(struct task_struct *tsk)
 	return pid_vnr(task_tgid(tsk));
 }
 
+static inline int pid_alive(const struct task_struct *p);
+static inline pid_t task_ppid_nr_ns(const struct task_struct *tsk, struct pid_namespace *ns)
+{
+	pid_t pid = 0;
+
+	rcu_read_lock();
+	if (pid_alive(tsk))
+		pid = task_tgid_nr_ns(rcu_dereference(tsk->real_parent), ns);
+	rcu_read_unlock();
+
+	return pid;
+}
+
+static inline pid_t task_ppid_nr(const struct task_struct *tsk)
+{
+	return task_ppid_nr_ns(tsk, &init_pid_ns);
+}
+
 
 static inline pid_t task_pgrp_nr_ns(struct task_struct *tsk,
 					struct pid_namespace *ns)
@@ -1763,7 +1799,7 @@ static inline pid_t task_pgrp_nr(struct task_struct *tsk)
  * If pid_alive fails, then pointers within the task structure
  * can be stale and must not be dereferenced.
  */
-static inline int pid_alive(struct task_struct *p)
+static inline int pid_alive(const struct task_struct *p)
 {
 	return p->pids[PIDTYPE_PID].pid != NULL;
 }
@@ -2389,6 +2425,27 @@ extern bool current_is_single_threaded(void);
 #define while_each_thread(g, t) \
 	while ((t = next_thread(t)) != g)
 
+#if 0
+//odroid
+//#ifdef CONFIG_PLAT_MESON
+
+#define __for_each_thread(signal, t)	\
+	list_for_each_entry_rcu(t, &(signal)->thread_head, thread_node)
+
+#define for_each_thread(p, t)		\
+	__for_each_thread((p)->signal, t)
+
+/* Careful: this is a double loop, 'break' won't work as expected. */
+#define for_each_process_thread(p, t)	\
+	for_each_process(p) for_each_thread(p, t)
+
+//#else
+#define for_each_process(p) \
+        for (p = &init_task ; (p = next_task(p)) != &init_task ; )
+
+//#endif
+#endif
+
 static inline int get_nr_threads(struct task_struct *tsk)
 {
 	return tsk->signal->nr_threads;
@@ -2545,6 +2602,13 @@ static inline unsigned long *end_of_stack(struct task_struct *p)
 
 #endif
 
+static inline int object_starts_on_stack(void *obj)
+{
+        const void *stack = task_stack_page(current);
+
+        return (obj >= stack) && (obj < (stack + THREAD_SIZE));
+}
+
 static inline int object_is_on_stack(void *obj)
 {
 	void *stack = task_stack_page(current);
@@ -2693,6 +2757,14 @@ static inline int spin_needbreak(spinlock_t *lock)
 	return 0;
 #endif
 }
+
+
+#if defined( CONFIG_OCTEON_FUTURE_BOARD) || defined (CONFIG_PLAT_MESON)
+//#ifdef CONFIG_OCTEON_FUTURE_BOARD
+static inline int tsk_is_polling(struct task_struct *p) { return 0; }
+static inline void current_set_polling(void) { }
+static inline void current_clr_polling(void) { }
+#endif
 
 /*
  * Thread group CPU time accounting.

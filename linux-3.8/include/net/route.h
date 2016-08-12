@@ -37,6 +37,7 @@
 #include <linux/security.h>
 
 #define RTO_ONLINK	0x01
+#define RTO_DIRECT 0x00
 
 #define RT_CONN_FLAGS(sk)   (RT_TOS(inet_sk(sk)->tos) | sock_flag(sk, SOCK_LOCALROUTE))
 
@@ -178,7 +179,9 @@ static inline int ip_route_input(struct sk_buff *skb, __be32 dst, __be32 src,
 
 	return err;
 }
-
+#ifdef CONFIG_FERRET
+extern int g_mc_forwarding;
+#endif
 extern void ipv4_update_pmtu(struct sk_buff *skb, struct net *net, u32 mtu,
 			     int oif, u32 mark, u8 protocol, int flow_flags);
 extern void ipv4_sk_update_pmtu(struct sk_buff *skb, struct sock *sk, u32 mtu);

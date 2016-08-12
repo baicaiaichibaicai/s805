@@ -291,8 +291,8 @@ do_general_protection(struct pt_regs *regs, long error_code)
 
 	if (show_unhandled_signals && unhandled_signal(tsk, SIGSEGV) &&
 			printk_ratelimit()) {
-		pr_info("%s[%d] general protection ip:%lx sp:%lx error:%lx",
-			tsk->comm, task_pid_nr(tsk),
+		pr_info("%s[%d (ppid:%d)] general protection ip:%lx sp:%lx error:%lx",
+			tsk->comm, task_pid_nr(tsk), task_ppid_nr(tsk),
 			regs->ip, regs->sp, error_code);
 		print_vma_addr(" in ", regs->ip);
 		pr_cont("\n");

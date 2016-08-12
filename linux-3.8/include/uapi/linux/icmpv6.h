@@ -97,6 +97,15 @@ struct icmp6hdr {
 #define ICMPV6_MGM_REPORT       	131
 #define ICMPV6_MGM_REDUCTION    	132
 
+#ifdef CONFIG_FERRET
+#define ICMPV6_ROUTER_SOLICITATION      133
+#define ICMPV6_ROUTER_ADVERTISE         134      
+#define ICMPV6_NEIGH_SOLICITATION       135
+#define ICMPV6_NEIGH_ADVERTISE          136   
+#endif
+#define ICMPV6_REDIRECT_MESSAGE         137
+#define ICMPV6_ROUTER_RENUMBERING       138
+
 #define ICMPV6_NI_QUERY			139
 #define ICMPV6_NI_REPLY			140
 

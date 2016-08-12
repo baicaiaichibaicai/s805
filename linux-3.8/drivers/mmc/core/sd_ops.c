@@ -22,6 +22,9 @@
 #include "core.h"
 #include "sd_ops.h"
 
+//odroid
+//#include <linux/mmc/core.h>
+
 int mmc_app_cmd(struct mmc_host *host, struct mmc_card *card)
 {
 	int err;
@@ -281,6 +284,9 @@ int mmc_app_send_scr(struct mmc_card *card, u32 *scr)
 	data.sg = &sg;
 	data.sg_len = 1;
 
+        //
+        printk("opcode:%x flags:%x d_flag:%x",cmd.opcode,cmd.flags,data.flags);
+
 	sg_init_one(&sg, data_buf, 8);
 
 	mmc_set_data_timeout(&data, card);
@@ -297,7 +303,7 @@ int mmc_app_send_scr(struct mmc_card *card, u32 *scr)
 
 	scr[0] = be32_to_cpu(scr[0]);
 	scr[1] = be32_to_cpu(scr[1]);
-
+	
 	return 0;
 }
 

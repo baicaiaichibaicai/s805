@@ -44,6 +44,11 @@ struct fib_config {
 	u32			fc_flow;
 	u32			fc_nlflags;
 	struct nl_info		fc_nlinfo;
+#ifdef CONFIG_FERRET
+	unsigned short		fc_distance;
+	unsigned short		fc_route_proto;
+	int					fc_uptime;
+#endif
  };
 
 struct fib_info;
@@ -114,9 +119,15 @@ struct fib_info {
 #ifdef CONFIG_IP_ROUTE_MULTIPATH
 	int			fib_power;
 #endif
+#ifdef CONFIG_FERRET
+	unsigned short		fc_distance;
+	unsigned short		fc_route_proto;
+	int					fc_uptime;
+#endif
 	struct rcu_head		rcu;
 	struct fib_nh		fib_nh[0];
 #define fib_dev		fib_nh[0].nh_dev
+
 };
 
 
@@ -327,6 +338,7 @@ static inline void fib_info_put(struct fib_info *fi)
 extern int __net_init  fib_proc_init(struct net *net);
 extern void __net_exit fib_proc_exit(struct net *net);
 #else
+
 static inline int fib_proc_init(struct net *net)
 {
 	return 0;

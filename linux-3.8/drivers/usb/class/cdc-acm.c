@@ -54,6 +54,49 @@
 #define DRIVER_AUTHOR "Armin Fuerst, Pavel Machek, Johannes Erdfelt, Vojtech Pavlik, David Kubicek, Johan Hovold"
 #define DRIVER_DESC "USB Abstract Control Model driver for USB modems and ISDN adapters"
 
+#ifdef CONFIG_FERRET
+#define MOTOROLA_VENDOR_ID      0x0c44
+#define SKT_VENDOR_ID           0x16d8
+
+#define ACM_PRODUCT_IDEN_365    0x0020
+#define ACM_PRODUCT_CLU_1000KK  0x9201
+#define MSG_LEN         31
+#define MAX_ACM_DEV     2
+
+static char msg_629s[]={0x55, 0x53, 0x42, 0x43, 0x12, 0x34, 0x56, 0x78, 0x24, 0x00,
+   0x00, 0x00, 0x80, 0x00, 0x0d, 0xfe, 0x52, 0x44, 0x45, 0x56,
+   0x43, 0x48, 0x47, 0x3d, 0x4e, 0x44, 0x49, 0x53, 0x00, 0x00, 0x00};
+struct _usb_modem {
+   __u16       idVendor;
+   __u16       idProduct;
+   __u8        en_port;
+   __u8        endpoint;
+   __u8        start_minor;
+   __u8        state;  /* 0: release , 1 : attaching , 2 : Ready */
+   void        *msg;
+};
+
+enum type_modem {
+   TYPE_TRS = 0,
+   TYPE_LTE,
+};
+
+enum state_usb_modem {
+   STATE_DETACH = 0,
+   STATE_ATTACH,
+   STATE_READY,
+};
+
+static struct _usb_modem f_modem[MAX_ACM_DEV] = {
+   { MOTOROLA_VENDOR_ID, ACM_PRODUCT_IDEN_365, .state = STATE_DETACH },
+   { SKT_VENDOR_ID,    ACM_PRODUCT_CLU_1000KK, 3, 1 , .state = STATE_DETACH},
+};
+
+static void usb_modem_init(void);
+static int lte_proc_init(void);
+static int find_acm_modem(struct usb_device *dev);
+#endif
+
 static struct usb_driver acm_driver;
 static struct tty_driver *acm_tty_driver;
 static struct acm *acm_table[ACM_TTY_MINORS];
@@ -1011,6 +1054,19 @@ static int acm_probe(struct usb_interface *intf,
 			buflen = intf->cur_altsetting->endpoint->extralen;
 			buffer = intf->cur_altsetting->endpoint->extra;
 		} else {
+#ifdef CONFIG_FERRET
+			if (usb_dev && le16_to_cpu(usb_dev->descriptor.idVendor) == SKT_VENDOR_ID &&
+					le16_to_cpu(usb_dev->descriptor.idProduct) == ACM_PRODUCT_CLU_1000KK)
+			{
+				if (f_modem[TYPE_LTE].state == STATE_DETACH) {
+					int a_len = 0;
+					usb_bulk_msg(usb_dev, usb_sndbulkpipe(usb_dev, f_modem[TYPE_LTE].endpoint),
+							f_modem[TYPE_LTE].msg, MSG_LEN, &a_len, 20000);
+					f_modem[TYPE_LTE].state = STATE_ATTACH;
+				}
+				return 0;
+			}
+#endif
 			dev_err(&intf->dev,
 				"Zero length descriptor references\n");
 			return -EINVAL;
@@ -1348,6 +1404,14 @@ skip_countries:
 	usb_get_intf(control_interface);
 	tty_port_register_device(&acm->port, acm_tty_driver, minor,
 			&control_interface->dev);
+#ifdef CONFIG_FERRET
+	i = find_acm_modem(acm->dev);
+
+	if ((i>=0) && i<MAX_ACM_DEV) {
+		f_modem[i].start_minor = minor;
+		f_modem[i].state = STATE_READY;
+	}
+#endif
 
 	return 0;
 alloc_fail7:
@@ -1405,6 +1469,15 @@ static void acm_disconnect(struct usb_interface *intf)
 		device_remove_file(&acm->control->dev,
 				&dev_attr_iCountryCodeRelDate);
 	}
+
+#ifdef CONFIG_FERRET
+	i = find_acm_modem(acm->dev);
+	if ((i>=0) && (i<MAX_ACM_DEV)) {
+		f_modem[i].start_minor = 0;
+		f_modem[i].state = STATE_DETACH;
+	}
+#endif
+
 	device_remove_file(&acm->control->dev, &dev_attr_bmCapabilities);
 	usb_set_intfdata(acm->control, NULL);
 	usb_set_intfdata(acm->data, NULL);
@@ -1540,6 +1613,10 @@ static int acm_reset_resume(struct usb_interface *intf)
  */
 
 static const struct usb_device_id acm_ids[] = {
+#ifdef CONFIG_FERRET
+	{ USB_DEVICE(SKT_VENDOR_ID, ACM_PRODUCT_CLU_1000KK), /* CMOTECH CLU-1000KK */
+	},
+#endif
 	/* quirky and broken devices */
 	{ USB_DEVICE(0x0870, 0x0001), /* Metricom GS Modem */
 	.driver_info = NO_UNION_NORMAL, /* has no union descriptor */
@@ -1774,6 +1851,11 @@ static int __init acm_init(void)
 								HUPCL | CLOCAL;
 	tty_set_operations(acm_tty_driver, &acm_ops);
 
+#ifdef CONFIG_FERRET
+	usb_modem_init();
+	lte_proc_init();
+#endif
+
 	retval = tty_register_driver(acm_tty_driver);
 	if (retval) {
 		put_tty_driver(acm_tty_driver);
@@ -1806,3 +1888,58 @@ MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL");
 MODULE_ALIAS_CHARDEV_MAJOR(ACM_TTY_MAJOR);
+
+#ifdef CONFIG_FERRET
+#include <linux/proc_fs.h>
+extern struct proc_dir_entry *proc_ferret_system;
+extern struct proc_dir_entry *proc_ferret_network;				// 네트워크
+static void usb_modem_init(void)
+{
+   /* TRS is not need to message content */
+
+   /* C-Motech CLU1000KK Modem */
+   f_modem[TYPE_LTE].msg = kmalloc(MSG_LEN, GFP_ATOMIC);
+   if (f_modem[TYPE_LTE].msg == NULL)
+       return ;
+   memcpy(f_modem[TYPE_LTE].msg, msg_629s, MSG_LEN);
+}
+
+static int find_acm_modem(struct usb_device *dev)
+{
+   __u16 idVendor = le16_to_cpu(dev->descriptor.idVendor);
+   __u16 idProduct = le16_to_cpu(dev->descriptor.idProduct);
+   int i;
+
+   if (dev) {
+       for (i=0; i<MAX_ACM_DEV; i++) {
+           if((idVendor == f_modem[i].idVendor) && (idProduct == f_modem[i].idProduct))
+               return i;
+       }
+   }
+   return -1;
+}
+
+static int lte_proc_read(char *page, char **start,off_t off, int count, int *eof,void *data)
+{
+   int ret = 0;
+   if (f_modem[TYPE_LTE].state == STATE_READY)
+       ret += snprintf(page+ret, count-ret, "ttyACM%d\n", f_modem[TYPE_LTE].start_minor);
+   return ret;
+}
+
+static int lte_proc_init(void)
+{
+   struct proc_dir_entry *p = NULL;
+
+   p = create_proc_entry("acm_lte", 0, proc_ferret_network);
+
+   if (p == NULL) {
+       printk("Creating proc entry failed: /proc/ferret/system/acm_lte\n");
+       return -ENOMEM;
+   }
+
+   p->read_proc = lte_proc_read;
+   return 0;
+}
+#endif
+

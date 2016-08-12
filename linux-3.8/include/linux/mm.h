@@ -108,6 +108,10 @@ extern unsigned int kobjsize(const void *objp);
 #define VM_NOHUGEPAGE	0x40000000	/* MADV_NOHUGEPAGE marked this vma */
 #define VM_MERGEABLE	0x80000000	/* KSM may merge identical pages */
 
+//Add for odroidc, 160602 
+#define VM_RESERVED	(VM_DONTEXPAND | VM_DONTDUMP)	/*add this define for some code use it*/
+
+
 #if defined(CONFIG_X86)
 # define VM_PAT		VM_ARCH_1	/* PAT reserves whole VMA at once (x86) */
 #elif defined(CONFIG_PPC)
@@ -1318,7 +1322,74 @@ extern void free_area_init(unsigned long * zones_size);
 extern void free_area_init_node(int nid, unsigned long * zones_size,
 		unsigned long zone_start_pfn, unsigned long *zholes_size);
 extern void free_initmem(void);
+#ifdef CONFIG_OCTEON_FUTURE_BOARD
+/*
+ * Free reserved pages within range [PAGE_ALIGN(start), end & PAGE_MASK)
+ * into the buddy system. The freed pages will be poisoned with pattern
+ * "poison" if it's non-zero.
+ * Return pages freed into the buddy system.
+ */
+extern unsigned long free_reserved_area(unsigned long start, unsigned long end,
+					int poison, char *s);
+#ifdef	CONFIG_HIGHMEM
+/*
+ * Free a highmem page into the buddy system, adjusting totalhigh_pages
+ * and totalram_pages.
+ */
+extern void free_highmem_page(struct page *page);
+#endif
 
+static inline void adjust_managed_page_count(struct page *page, long count)
+{
+	totalram_pages += count;
+}
+extern void mem_init_print_info(const char *str);
+
+/* Free the reserved page into the buddy system, so it gets managed. */
+static inline void __free_reserved_page(struct page *page)
+{
+	ClearPageReserved(page);
+	init_page_count(page);
+	__free_page(page);
+}
+
+static inline void free_reserved_page(struct page *page)
+{
+	__free_reserved_page(page);
+	adjust_managed_page_count(page, 1);
+}
+
+static inline void mark_page_reserved(struct page *page)
+{
+	SetPageReserved(page);
+	adjust_managed_page_count(page, -1);
+}
+
+/*
+ * Default method to free all the __init memory into the buddy system.
+ * The freed pages will be poisoned with pattern "poison" if it is
+ * non-zero. Return pages freed into the buddy system.
+ */
+static inline unsigned long free_initmem_default(int poison)
+{
+	extern char __init_begin[], __init_end[];
+
+	return free_reserved_area(PAGE_ALIGN((unsigned long)&__init_begin) ,
+				  ((unsigned long)&__init_end) & PAGE_MASK,
+				  poison, "unused kernel");
+}
+
+static inline unsigned long get_num_physpages(void)
+{
+	int nid;
+	unsigned long phys_pages = 0;
+
+	for_each_online_node(nid)
+		phys_pages += node_present_pages(nid);
+
+	return phys_pages;
+}
+#endif
 #ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
 /*
  * With CONFIG_HAVE_MEMBLOCK_NODE_MAP set, an architecture may initialise its
@@ -1350,8 +1421,8 @@ extern void free_area_init_nodes(unsigned long *max_zone_pfn);
 unsigned long node_map_pfn_alignment(void);
 unsigned long __absent_pages_in_range(int nid, unsigned long start_pfn,
 						unsigned long end_pfn);
-extern unsigned long absent_pages_in_range(unsigned long start_pfn,
-						unsigned long end_pfn);
+//extern unsigned long absent_pages_in_range(unsigned long start_pfn,
+//						unsigned long end_pfn);
 extern void get_pfn_range_for_nid(unsigned int nid,
 			unsigned long *start_pfn, unsigned long *end_pfn);
 extern unsigned long find_min_pfn_with_active_regions(void);
@@ -1360,6 +1431,8 @@ extern void free_bootmem_with_active_regions(int nid,
 extern void sparse_memory_present_with_active_regions(int nid);
 
 #endif /* CONFIG_HAVE_MEMBLOCK_NODE_MAP */
+
+extern unsigned long absent_pages_in_range(unsigned long start_pfn,unsigned long end_pfn);
 
 #if !defined(CONFIG_HAVE_MEMBLOCK_NODE_MAP) && \
     !defined(CONFIG_HAVE_ARCH_EARLY_PFN_TO_NID)
