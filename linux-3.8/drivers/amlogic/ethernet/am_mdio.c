@@ -93,6 +93,7 @@ int aml_mdio_register(struct net_device *ndev)
                 goto bus_register_fail;
         }
 
+	printk("%s[%d]\n", __func__, __LINE__);
         priv->mii = new_bus;
 
         found = 0;

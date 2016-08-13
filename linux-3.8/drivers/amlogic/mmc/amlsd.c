@@ -696,6 +696,7 @@ int of_amlsd_init(struct amlsd_platform* pdata)
 
 	BUG_ON(!pdata);
 
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
 	if(pdata->gpio_cd) {
 		ret = amlogic_gpio_request_one(pdata->gpio_cd, GPIOF_IN, MODULE_NAME);
         CHECK_RET(ret);
@@ -731,6 +732,7 @@ int of_amlsd_init(struct amlsd_platform* pdata)
     }
 #endif
 
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
 	// if(pdata->port == MESON_SDIO_PORT_A)
 		// wifi_setup_dt();
 	return 0;
@@ -1372,6 +1374,7 @@ void aml_emmc_hw_reset(struct mmc_host *mmc)
 {
     struct amlsd_platform * pdata = mmc_priv(mmc);
 
+	printk("%s[%d]\n", __func__, __LINE__);
     if(!aml_card_type_mmc(pdata)){
         return;
     }

@@ -614,7 +614,7 @@ struct sdhc_clk2{
 #define STAT_POLL_TIMEOUT				0xfffff
 
 #define MMC_RSP_136_NUM					4
-#define MMC_MAX_DEVICE					3
+#define MMC_MAX_DEVICE					1
 #define MMC_TIMEOUT						5000
 
 //#define printk(a...)
@@ -653,7 +653,8 @@ extern struct mmc_host *sdio_host;
 
 #define R_BOOT_DEVICE_FLAG  READ_CBUS_REG(ASSIST_POR_CONFIG)
 #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON8 
-#define POR_BOOT_VALUE ((((R_BOOT_DEVICE_FLAG>>9)&1)<<2)|((R_BOOT_DEVICE_FLAG>>6)&3)) // {poc[9],poc[7:6]}
+//#define POR_BOOT_VALUE ((((R_BOOT_DEVICE_FLAG>>9)&1)<<2)|((R_BOOT_DEVICE_FLAG>>6)&3)) // {poc[9],poc[7:6]}
+#define POR_BOOT_VALUE 0
 #else
 #define POR_BOOT_VALUE (R_BOOT_DEVICE_FLAG & 7)
 #endif

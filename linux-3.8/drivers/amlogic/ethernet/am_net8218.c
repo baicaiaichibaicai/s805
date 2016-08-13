@@ -1351,14 +1351,77 @@ static void config_mac_addr(struct net_device *dev, void *mac)
 static void mac_from_efuse_to_DEFMAC(void)
 {
 	unsigned char mac[6];
-	unsigned char *efuse_mac;
 	int i;
-	
+
+#if 0
+	unsigned char *efuse_mac;
+
 	efuse_mac = aml_efuse_get_item("mac");
 	for (i = 0; i < 6 && efuse_mac[0] != '\0' && efuse_mac[1] != '\0'; i++) {
 		mac[i] = chartonum(efuse_mac[0]) << 4 | chartonum(efuse_mac[1]);
 		efuse_mac += 3;
 	}
+#else
+	{
+		char *pItem;
+
+		pItem = strstr(boot_command_line, "mac=");
+		if (pItem == NULL)
+		{
+			mac[0] = 0x00;	
+			mac[1] = 0x40;	
+			mac[2] = 0x5c;	
+			mac[3] = 0x01;
+			mac[4] = 0x01;
+			mac[5] = 0x01;
+		}
+		else
+		{
+			pItem += 4;	// skip "mac="
+			if ((pItem[2] == ':') 
+			    && (pItem[5] == ':') 
+				&& (pItem[8] == ':') 
+				&& (pItem[11] == ':') 
+				&& (pItem[14] == ':') 
+				&& ((pItem[17] == ' ') || (pItem[17] == '\0')))
+			{
+				int	value = 0;
+				for(i = 0 ; i < 6 ; i++)
+				{
+					if ( '0' <= pItem[i*3]	&& pItem[i*3] <= '9')
+					{
+						value = ((pItem[i*3] - '0') << 4);
+					}
+					else if ( 'a' <= pItem[i*3]	&& pItem[i*3] <= 'f')
+					{
+						value = 10 + ((pItem[i*3] - 'a') << 4);
+					}
+					else if ( 'A' <= pItem[i*3]	&& pItem[i*3] <= 'F')
+					{
+						value = 10 + ((pItem[i*3] - 'A') << 4);
+					}
+
+					if ( '0' <= pItem[i*3+1] && pItem[i*3+1] <= '9')
+					{
+						value += (pItem[i*3+1] - '0');
+					}
+					else if ( 'a' <= pItem[i*3+1] && pItem[i*3+1] <= 'f')
+					{
+						value += 10 + (pItem[i*3+1] - 'a');
+					}
+					else if ( 'A' <= pItem[i*3+1] && pItem[i*3+1] <= 'F')
+					{
+						value += 10 + (pItem[i*3+1] - 'A');
+					}
+					
+					mac[i] = (unsigned char)value;
+				}
+
+			}
+
+		}
+	}
+#endif
 	memcpy(DEFMAC, mac, 6);
 	g_mac_addr_setup++;
 }
@@ -1578,6 +1641,7 @@ static int setup_net_device(struct net_device *dev)
 	               (1 << 13) |          //FBI: Fatal Bus Error Interrupt
 	               (1) | 		        //tx interrupt
 	               0;
+
 	mac_from_efuse_to_DEFMAC();
 	config_mac_addr(dev, DEFMAC);
 	dev_alloc_name(dev, "eth%d");

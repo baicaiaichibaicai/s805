@@ -57,6 +57,7 @@ void sd_io_init(struct memory_card *card)
 	struct aml_card_info *aml_card_info = card->card_plat_info;
 	SD_WORK_MODE = aml_card_info->work_mode;
 
+	printk("%s[%d]\n", __func__, __LINE__);
 	switch (aml_card_info->io_pad_type) {
 		
 		case SDHC_CARD_0_5:		//SDHC-B
@@ -356,3 +357,4 @@ void sd_gpio_enable(SDIO_Pad_Type_t io_pad_type)
 	
 	return;
 }
+

@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <asm/dma-mapping.h>
 #include <mach/power_gate.h>
+#include <mach/card_io.h>
 #include <linux/clk.h>
 #include <mach/register.h>
 // #include <mach/gpio.h>
@@ -2341,6 +2342,7 @@ static int aml_sdhc_probe(struct platform_device *pdev)
     struct amlsd_platform* pdata;
     int ret = 0, i;
 
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
     // pre_probe_host_ops(); // for tmp debug
 
     aml_mmc_ver_msg_show();
@@ -2351,9 +2353,11 @@ static int aml_sdhc_probe(struct platform_device *pdev)
     if(amlsd_get_reg_base(pdev, host))
         goto fail_init_host;
 
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
     aml_sdhc_reg_init(host);
     host->pdev = pdev;
 
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
     for(i=0;i<MMC_MAX_DEVICE;i++){
         /*malloc extra amlsd_platform*/
         mmc = mmc_alloc_host(sizeof(struct amlsd_platform), &pdev->dev);
@@ -2362,6 +2366,7 @@ static int aml_sdhc_probe(struct platform_device *pdev)
             goto probe_free_host;
         }
 
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
         pdata = mmc_priv(mmc);
         memset(pdata, 0, sizeof(struct amlsd_platform));
         if(amlsd_get_platform_data(pdev, pdata, mmc, i)) {
@@ -2422,11 +2427,13 @@ static int aml_sdhc_probe(struct platform_device *pdev)
 			mmc->rescan_entered = 0; 
         }
 
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
         if(pdata->port_init)
             pdata->port_init(pdata);
 
-        aml_sduart_pre(pdata);
+        //aml_sduart_pre(pdata);
 
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
         ret = mmc_add_host(mmc);
         if (ret) { // error
             sdhc_err("Failed to add mmc host.\n");
@@ -2438,6 +2445,7 @@ static int aml_sdhc_probe(struct platform_device *pdev)
             }
         }
 
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
         aml_sdhc_init_debugfs(mmc);
         /*Add each mmc host pdata to this controller host list*/
         INIT_LIST_HEAD(&pdata->sibling);
@@ -2467,6 +2475,7 @@ static int aml_sdhc_probe(struct platform_device *pdev)
             }
         }
     }
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
 
     print_tmp("%s() success!\n", __FUNCTION__);
     platform_set_drvdata(pdev, host);
@@ -2544,6 +2553,14 @@ static struct platform_driver aml_sdhc_driver = {
 
 static int __init aml_sdhc_init(void)
 {
+	unsigned int	ulReg;
+
+
+	ulReg= READ_CBUS_REG(PERIPHS_PIN_MUX_2 );
+	printk("%s[%d] : %08x\n", __func__, __LINE__, ulReg);
+	WRITE_CBUS_REG(PERIPHS_PIN_MUX_2 , ulReg | (0x3eUL << 10));
+	ulReg= READ_CBUS_REG(PERIPHS_PIN_MUX_2 );
+	printk("%s[%d] : %08x\n", __func__, __LINE__, ulReg);
     return platform_driver_register(&aml_sdhc_driver);
 }
 
