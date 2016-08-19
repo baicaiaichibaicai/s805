@@ -409,7 +409,8 @@ early_param("storage",get_storage_device);
 
 bool is_emmc_exist (struct amlsd_host* host) // is eMMC/tSD exist
 {
-    print_tmp("host->storage_flag=%d, POR_BOOT_VALUE=%d\n", host->storage_flag, POR_BOOT_VALUE);
+    printk("%s[%d] : host->storage_flag=%d, POR_BOOT_VALUE=%d\n", __func__, __LINE__, host->storage_flag, POR_BOOT_VALUE);
+	printk("%s[%d] : POR_CARD_BOOT = %d, POR_EMMC_BOOT = %d\n", __func__, __LINE__, POR_CARD_BOOT(), POR_EMMC_BOOT());
     if ((host->storage_flag == EMMC_BOOT_FLAG) || (host->storage_flag == SPI_EMMC_FLAG)
             || (((host->storage_flag == 0)  || (host->storage_flag == -1)) && (POR_CARD_BOOT() || POR_EMMC_BOOT() || POR_SPI_BOOT()))) {
         return true;
@@ -698,10 +699,12 @@ int of_amlsd_init(struct amlsd_platform* pdata)
 
 	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
 	if(pdata->gpio_cd) {
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
 		ret = amlogic_gpio_request_one(pdata->gpio_cd, GPIOF_IN, MODULE_NAME);
         CHECK_RET(ret);
     }
 	if(pdata->gpio_ro) {
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
 		ret = amlogic_gpio_request_one(pdata->gpio_ro, GPIOF_IN, MODULE_NAME);
         if (!ret) { // ok
             ret = amlogic_set_pull_up_down(pdata->gpio_ro, 1, MODULE_NAME); // 0:pull down, 1:pull up
@@ -712,10 +715,12 @@ int of_amlsd_init(struct amlsd_platform* pdata)
     }
 	if(pdata->gpio_power){
 		if(pdata->power_level) {
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
 			ret = amlogic_gpio_request_one(pdata->gpio_power,
 						GPIOF_OUT_INIT_LOW, MODULE_NAME);
             CHECK_RET(ret);
         } else {
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
 			ret = amlogic_gpio_request_one(pdata->gpio_power,
 						GPIOF_OUT_INIT_HIGH, MODULE_NAME);
             CHECK_RET(ret);
@@ -723,9 +728,11 @@ int of_amlsd_init(struct amlsd_platform* pdata)
 	}
 #if defined(CONFIG_MACH_MESON8B_ODROIDC)
 	if(pdata->gpio_volsw) {
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
         ret = amlogic_gpio_request_one(pdata->gpio_volsw, GPIOF_OUT_INIT_LOW, MODULE_NAME);
         CHECK_RET(ret);
         if (ret == 0) {
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
             ret = amlogic_gpio_direction_output(pdata->gpio_volsw, 0, MODULE_NAME); // output low default 3.3V
             CHECK_RET(ret);
         }
@@ -1477,6 +1484,7 @@ void aml_dbg_verify_pull_up (struct amlsd_platform * pdata)
     int reg_en;
     int reg_mask;
 
+	printk("%s[%d] : port = %d\n", __func__, __LINE__, pdata->port);
     if (pdata->port == PORT_SDIO_A) {
         reg = READ_CBUS_REG(SDIO_PULL_UP_REG);
         reg_en = READ_CBUS_REG(SDIO_PULL_UP_REG_EN);

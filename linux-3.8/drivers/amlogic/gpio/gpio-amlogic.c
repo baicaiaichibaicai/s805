@@ -51,6 +51,7 @@ int gpio_range_check(unsigned int  pin)
 }
 static void set_gpio_owner(unsigned int  pin,const char * owner)
 {
+	printk("##################### %s(%d,%s)\n", __func__, pin, owner);
 	amlogic_pins[pin].gpio_owner=owner;	
 }
 
@@ -59,6 +60,8 @@ static void set_gpio_owner(unsigned int  pin,const char * owner)
 int amlogic_gpio_request(unsigned int  pin,const char *label)
 {
 	int ret=-1;
+
+	printk("#####################  %s(%d,%s)\n", __func__, pin, label);
 	if(gpio_range_check(pin))
 		return -1;
 	ret=gpio_request(pin, label);
@@ -259,12 +262,18 @@ int amlogic_set_value(unsigned int pin,int value,const char *owner)
 {
 	int ret=-1;
 	if(gpio_range_check(pin))
+	{
+		pr_err("Failed to check GPIO range[Pin = %d]\n", pin);
 		return -1;
+	}
 	if( amlogic_pins[pin].gpio_owner && owner)
 		if(!strcmp(amlogic_pins[pin].gpio_owner,owner)){
 			gpio_set_value(pin,value);
 			return 0;
 		}
+
+
+	pr_err("Failed to check GPIO range[Pin = %d, amlogic_pins[pin].gpio_owner = %s, owner = %s]\n", pin, amlogic_pins[pin].gpio_owner, owner);
 	return ret;
 }
 EXPORT_SYMBOL(amlogic_set_value);

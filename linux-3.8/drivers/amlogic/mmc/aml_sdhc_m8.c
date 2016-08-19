@@ -22,7 +22,7 @@
 #include <linux/slab.h>
 #include <asm/dma-mapping.h>
 #include <mach/power_gate.h>
-#include <mach/card_io.h>
+//#include <mach/card_io.h>
 #include <linux/clk.h>
 #include <mach/register.h>
 // #include <mach/gpio.h>
@@ -953,6 +953,7 @@ void aml_sdhc_request_done(struct mmc_host *mmc, struct mmc_request *mrq)
     host->req_cnt--;
 
     aml_dbg_verify_pinmux(pdata);
+	printk("%s[%d]\n", __func__, __LINE__);
     aml_dbg_verify_pull_up(pdata);
 
     if (0) {
@@ -1350,6 +1351,7 @@ void aml_sdhc_request(struct mmc_host *mmc, struct mmc_request *mrq)
         pdata->xfer_pre(pdata);
 
 #ifdef      CONFIG_MMC_AML_DEBUG
+	printk("%s[%d]\n", __func__, __LINE__);
     aml_dbg_verify_pull_up(pdata);
     aml_dbg_verify_pinmux(pdata);
 #endif
@@ -2063,15 +2065,11 @@ static void aml_sdhc_set_bus_width(struct amlsd_platform* pdata, u32 busw_ios)
     pdata->width = width;
     writel(vctrl, host->base+SDHC_CTRL);
     sdhc_dbg(AMLSD_DBG_IOS, "Bus Width Ios %d\n", busw_ios);
-
-	//printk("Bus width %d\n", 2* busw_ios);
 }
 
 /*call by mmc, power on, power off ...*/
 static void aml_sdhc_set_power(struct amlsd_platform* pdata, u32 power_mode)
 {
-    //printk("sd power mode %d\n",power_mode);
-
     switch (power_mode) {
         case MMC_POWER_ON:
             if(pdata->pwr_pre)
@@ -2367,10 +2365,12 @@ static int aml_sdhc_probe(struct platform_device *pdev)
         }
 
 	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
+
         pdata = mmc_priv(mmc);
         memset(pdata, 0, sizeof(struct amlsd_platform));
         if(amlsd_get_platform_data(pdev, pdata, mmc, i)) {
             mmc_free_host(mmc);
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
             break;
         }
         if (pdata->port == PORT_SDHC_C) {
@@ -2382,6 +2382,7 @@ static int aml_sdhc_probe(struct platform_device *pdev)
                 memset(pdata, 0, sizeof(struct amlsd_platform));
                 if(amlsd_get_platform_data(pdev, pdata, mmc, i)) {
                     mmc_free_host(mmc);
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
                     break;
                 }
             }
@@ -2427,19 +2428,23 @@ static int aml_sdhc_probe(struct platform_device *pdev)
 			mmc->rescan_entered = 0; 
         }
 
-	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
         if(pdata->port_init)
-            pdata->port_init(pdata);
-
-        //aml_sduart_pre(pdata);
-
+		{
 	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
+            pdata->port_init(pdata);
+		}
+
+        aml_sduart_pre(pdata);
+
         ret = mmc_add_host(mmc);
         if (ret) { // error
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
             sdhc_err("Failed to add mmc host.\n");
             goto probe_free_host;
         } else { // ok
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
             if (aml_card_type_sdio(pdata)) { // if sdio_wifi
+	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
                 sdio_host = mmc;
                 //mmc->rescan_entered = 1; // do NOT run mmc_rescan for the first time
             }
@@ -2475,10 +2480,10 @@ static int aml_sdhc_probe(struct platform_device *pdev)
             }
         }
     }
-	printk("%s[%d] : %08x\n", __func__, __LINE__, READ_CBUS_REG(PERIPHS_PIN_MUX_2 ));
 
     print_tmp("%s() success!\n", __FUNCTION__);
     platform_set_drvdata(pdev, host);
+	printk("%s[%d] : %d\n", __func__, __LINE__, mmc->ios.bus_width );
     return 0;
 
 fail_cd_irq_in:
@@ -2556,9 +2561,9 @@ static int __init aml_sdhc_init(void)
 	unsigned int	ulReg;
 
 
-	ulReg= READ_CBUS_REG(PERIPHS_PIN_MUX_2 );
-	printk("%s[%d] : %08x\n", __func__, __LINE__, ulReg);
-	WRITE_CBUS_REG(PERIPHS_PIN_MUX_2 , ulReg | (0x3eUL << 10));
+//	ulReg= READ_CBUS_REG(PERIPHS_PIN_MUX_2 );
+//	printk("%s[%d] : %08x\n", __func__, __LINE__, ulReg);
+//	WRITE_CBUS_REG(PERIPHS_PIN_MUX_2 , ulReg | (0x3FUL << 10));
 	ulReg= READ_CBUS_REG(PERIPHS_PIN_MUX_2 );
 	printk("%s[%d] : %08x\n", __func__, __LINE__, ulReg);
     return platform_driver_register(&aml_sdhc_driver);

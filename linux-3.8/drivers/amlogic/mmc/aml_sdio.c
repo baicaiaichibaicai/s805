@@ -1337,6 +1337,14 @@ static int aml_sdio_probe(struct platform_device *pdev)
 
         pdata = mmc_priv(mmc);
         memset(pdata, 0, sizeof(struct amlsd_platform));
+#if 0 // XTRA
+		if (i == 1 )
+		{
+			printk("%s[%d]\n", __func__, __LINE__);
+            mmc_free_host(mmc);
+			break;		
+		}
+#endif
         if(amlsd_get_platform_data(pdev, pdata, mmc, i)) {
             mmc_free_host(mmc);
             break;
