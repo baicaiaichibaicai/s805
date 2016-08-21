@@ -1071,7 +1071,6 @@ static int aml_sdhc_probe(struct platform_device *pdev)
     struct amlsd_platform* pdata;
     int ret = 0, i;
 
-	printk("%s[%d]\n", __func__, __LINE__);
     //print_tmp("%s() begin!\n", __FUNCTION__);
 
     host = aml_sdhc_init_host();
